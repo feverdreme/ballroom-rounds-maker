@@ -1,4 +1,6 @@
 (library
  (name ballroom_rounds_maker_lib)
- (libraries core unix)
-)
+ (libraries core unix))
+
+(menhir
+ (modules parser))
