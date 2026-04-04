@@ -1,0 +1,4 @@
+(executable
+ (name main)
+ (libraries core unix ballroom_rounds_maker_lib)
+)
