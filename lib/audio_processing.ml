@@ -24,17 +24,18 @@ let run_command ?(check = false) (args : string list) : unit =
     | Unix.WSTOPPED signal ->
       Printf.ksprintf failwith "Command stopped by signal %d" signal
 
-(** Trim [source] to [song_duration] seconds with 5s fade-in/out and write the result to [dest]. *)
-let ffmpeg_trim ?(ffmpeg_path = "ffmpeg") ?(song_duration = 90)
-    (source : string) (dest : string) : unit =
-  let ffmpeg_seconds = seconds_to_ffmpeg_time song_duration in
+(** Trim [source] starting at [start] for [duration] seconds with configurable fade-in/out, writing to [dest]. *)
+let ffmpeg_trim ?(ffmpeg_path = "ffmpeg") ~(start : int) ~(duration : int)
+    ~(fade_in : int) ~(fade_out : int) (source : string) (dest : string) : unit =
+  let fade_out_start = duration - fade_out in
+  let af = Printf.sprintf "afade=t=in:st=0:d=%d,afade=out:st=%d:d=%d" fade_in fade_out_start fade_out in
   run_command
     [ ffmpeg_path
     ; "-hide_banner"; "-loglevel"; "error"
     ; "-i"; source
-    ; "-ss"; "00:00:00"
-    ; "-t"; ffmpeg_seconds
-    ; "-af"; "afade=t=in:st=0:d=5,afade=out:st=85:d=5"
+    ; "-ss"; seconds_to_ffmpeg_time start
+    ; "-t"; seconds_to_ffmpeg_time duration
+    ; "-af"; af
     ; "-y"
     ; dest
     ]
