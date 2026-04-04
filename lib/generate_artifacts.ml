@@ -6,14 +6,17 @@ type artifact = Break of {path: string; duration: int} | Song of {path: string}
   Applying artifact operations translates to performating certain (traceable) steps on disk.
 *)
 
+(** Return true if the event description represents a break (prefixed with "<BREAK>"). *)
 let is_break (events : string) : bool =
   String.starts_with ~prefix:"<BREAK>" events
 
+(** Parse a break event string (e.g. "<BREAK> 30") and return the duration in seconds. *)
 let extract_break (event : string) : int =
   match String.split_on_char ' ' event with
   | _ :: duration :: _ -> int_of_string duration
   | _ -> invalid_arg "extract_break: malformed break string"
 
+(** Create an artifact from an event description: a silent break MP3 or a copied song file. *)
 let create_artifact ?(ffmpeg_path="ffmpeg") (source_directory : string) (artifacts_directory : string) (description : string) : artifact =
   if is_break description then 
     let break_duration = extract_break description in
@@ -29,6 +32,7 @@ let create_artifact ?(ffmpeg_path="ffmpeg") (source_directory : string) (artifac
     copy_file ~src ~dst;
     Song {path = dst}
 
+(** Trim a song artifact to 90 seconds with fade effects. Breaks are returned unchanged. *)
 let trim_artifact (artifact : artifact) : artifact =
   match artifact with
   | Break {path; duration} -> Break {path; duration}
@@ -39,6 +43,7 @@ let trim_artifact (artifact : artifact) : artifact =
       trimmed_artifact_path;
     Song {path = trimmed_artifact_path}
 
+(** Concatenate a list of artifacts into a single MP3 at [output_path]. *)
 let concat_artifacts ?(ffmpeg_path="ffmpeg") (artifacts_directory : string) (artifacts : artifact list) (output_path : string) : unit =
   let artifact_paths: string list = List.map (fun artifact -> match artifact with | Song {path} -> path | Break {path; _} -> path) artifacts in
   ffmpeg_concat ~ffmpeg_path artifact_paths artifacts_directory output_path

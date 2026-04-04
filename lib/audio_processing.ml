@@ -1,9 +1,11 @@
+(** Convert an integer number of seconds to an "HH:MM:SS" string for use in ffmpeg time arguments. *)
 let seconds_to_ffmpeg_time (seconds : int) : string =
   let hours = seconds / 3600 in
   let minutes = seconds mod 3600 / 60 in
   let secs = seconds mod 60 in
   Printf.sprintf "%02d:%02d:%02d" hours minutes secs
 
+(** Run a subprocess with the given argument list. If [~check] is true, raise on non-zero exit. *)
 let run_command ?(check = false) (args : string list) : unit =
   if List.is_empty args then invalid_arg "run_command: empty argument list" else
   let prog = List.hd args in
@@ -22,6 +24,7 @@ let run_command ?(check = false) (args : string list) : unit =
     | Unix.WSTOPPED signal ->
       Printf.ksprintf failwith "Command stopped by signal %d" signal
 
+(** Trim [source] to [song_duration] seconds with 5s fade-in/out and write the result to [dest]. *)
 let ffmpeg_trim ?(ffmpeg_path = "ffmpeg") ?(song_duration = 90)
     (source : string) (dest : string) : unit =
   let ffmpeg_seconds = seconds_to_ffmpeg_time song_duration in
@@ -36,6 +39,7 @@ let ffmpeg_trim ?(ffmpeg_path = "ffmpeg") ?(song_duration = 90)
     ; dest
     ]
 
+(** Generate [break_duration] seconds of silence at [output_path]. Skips if the file already exists. *)
 let generate_silence ?(ffmpeg_path = "ffmpeg") (output_path : string)
     (break_duration : string) : unit =
   if Sys.file_exists output_path then
@@ -51,10 +55,12 @@ let generate_silence ?(ffmpeg_path = "ffmpeg") (output_path : string)
       ; output_path
       ]
 
+(** Resolve a relative path against the current working directory; absolute paths pass through unchanged. *)
 let make_absolute (path : string) : string =
   if Filename.is_relative path then Filename.concat (Sys.getcwd ()) path
   else path
 
+(** Write an ffmpeg concat-demuxer file listing the absolute paths of [sourcelist]. *)
 let create_concat_list (sourcelist : string list) (concat_list_path : string) :
     unit =
   let output_channel = open_out concat_list_path in
@@ -62,6 +68,7 @@ let create_concat_list (sourcelist : string list) (concat_list_path : string) :
       List.iter (fun source ->
         Printf.fprintf output_channel "file %s\n" (make_absolute source)) sourcelist)
 
+(** Concatenate audio files in [sourcelist] into a single MP3 at [output_path] using ffmpeg's concat demuxer. *)
 let ffmpeg_concat ?(ffmpeg_path = "ffmpeg") (sourcelist : string list)
     (artifacts_path : string) (output_path : string) : unit =
   Printf.printf "Concatenating files...\n";
