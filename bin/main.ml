@@ -9,6 +9,7 @@ let process_round (defaults : defaults) (round : round) : unit =
   Ballroom_rounds_maker_lib.File_utils.mkdir_p output_directory;
   let output_name = Filename.concat output_directory (round.name ^ ".mp3") in
   Printf.printf "Processing round: %s -> %s\n" round.name output_name;
+  flush_all (); (* Ensure all output buffers are flushed before intensive processing *)
   let artifacts = List.map
     (create_artifact ~ffmpeg_path:"./ffmpeg" source_directory artifacts_directory defaults)
     round.entries in
