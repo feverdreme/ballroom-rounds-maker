@@ -37,7 +37,7 @@ let parse_args () : build_config * string =
   (!config, !rounds_file_path)
 
 let process_round (config : build_config) (defaults : defaults) (round : round) : unit =
-  Ballroom_rounds_maker_lib.File_utils.mkdir_p config.output_directory;
+  Ballroom_rounds_maker_lib.File_operations.mkdir_p config.output_directory;
   let output_name = Filename.concat config.output_directory (round.name ^ ".mp3") in
   Printf.printf "Processing round: %s -> %s\n" round.name output_name;
   flush_all (); (* Ensure all output buffers are flushed before intensive processing *)
