@@ -6,3 +6,6 @@ hellrounds_source
 hellrounds_source_artifacts
 ffmpeg
 *.mp3
+.claude
+.DS_Store
+*.rounds
