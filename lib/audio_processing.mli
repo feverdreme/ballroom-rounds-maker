@@ -1,3 +1,5 @@
+open! Core
+
 (** Convert an integer number of seconds to an "HH:MM:SS" string for use in ffmpeg time arguments. *)
 val seconds_to_ffmpeg_time : int -> string
 

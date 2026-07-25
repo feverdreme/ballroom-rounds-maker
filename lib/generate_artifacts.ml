@@ -1,3 +1,4 @@
+open! Core
 open File_operations
 open Audio_processing
 
@@ -54,7 +55,7 @@ let create_artifact ?(ffmpeg_path="ffmpeg") (source_directory : string) (artifac
   | Break {duration; _} ->
     let break_dur = if duration = 0 then defaults.break_duration else duration in
     let break_filename = Printf.sprintf "%s/break_%d.mp3" artifacts_directory break_dur in
-    if not (Sys.file_exists break_filename) then
+    if not (Sys_unix.file_exists_exn break_filename) then
       generate_silence ~ffmpeg_path break_filename (seconds_to_ffmpeg_time break_dur);
     Break {path = break_filename; duration = break_dur}
   | Song {path; config} ->
@@ -79,5 +80,5 @@ let trim_artifact ?(ffmpeg_path="ffmpeg") (defaults : defaults) (artifact : arti
 
 (** Concatenate a list of artifacts into a single MP3 at [output_path]. *)
 let concat_artifacts ?(ffmpeg_path="ffmpeg") (artifacts_directory : string) (artifacts : artifact list) (output_path : string) : unit =
-  let artifact_paths = List.map (fun artifact -> match artifact with | Song {path; _} -> path | Break {path; _} -> path) artifacts in
+  let artifact_paths = List.map ~f:(fun artifact -> match artifact with | Song {path; _} -> path | Break {path; _} -> path) artifacts in
   ffmpeg_concat ~ffmpeg_path artifact_paths artifacts_directory output_path

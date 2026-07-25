@@ -1,3 +1,5 @@
+open! Core
+
 (** Per-song audio configuration. All times in seconds. None means "use the default". *)
 type song_config = {
   start : int option;
