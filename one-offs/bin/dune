@@ -1,0 +1,11 @@
+(executable
+ (name main)
+ (libraries
+  core
+  core_unix
+  core_unix.sys_unix
+  core_unix.command_unix
+  core_unix.filename_unix
+  unix
+  rounds_lib)
+ (preprocess (pps ppx_jane)))

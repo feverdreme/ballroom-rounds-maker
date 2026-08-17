@@ -1,0 +1,4 @@
+(library
+ (name rounds_lib)
+ (libraries core core_unix core_unix.sys_unix unix)
+ (preprocess (pps ppx_jane)))
