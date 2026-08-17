@@ -8,4 +8,4 @@ ffmpeg
 *.mp3
 .claude
 .DS_Store
-*.rounds
+rounds/
