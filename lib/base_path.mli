@@ -10,8 +10,8 @@ val create : base_dir:string -> t Or_error.t
 (** The underlying directory path. *)
 val get_path : t -> string
 
-(** [derive_path t ~path] joins [path] onto [t]'s directory. *)
-val derive_path : t -> path:string -> string
+(** [derive_path t path] joins [path] onto [t]'s directory. *)
+val derive_path : t -> string -> string
 
 (** Create [t]'s directory (and any missing parents) on disk if it doesn't already
     exist, then confirm the path really is a directory. *)

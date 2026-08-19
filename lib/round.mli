@@ -7,7 +7,7 @@ module Song : sig
     ; fade_in : int
     ; fade_out : int
     }
-  [@@deriving sexp]
+  [@@deriving sexp, to_string]
 
   val create
     :  filepath:string
@@ -18,7 +18,7 @@ module Song : sig
 end
 
 module Break : sig
-  type t = { duration : int } [@@deriving sexp]
+  type t = { duration : int } [@@deriving sexp, to_string]
 end
 
 module Event : sig
@@ -29,7 +29,7 @@ module Event : sig
         ; dance : string option
         }
     | Break of Break.t
-  [@@deriving sexp]
+  [@@deriving sexp, to_string]
 end
 
 type t =

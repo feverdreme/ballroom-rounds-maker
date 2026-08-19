@@ -1,15 +1,14 @@
 open! Core
 
-let prepend_base_dir ~base_path ~event =
+let map_path ~event ~(f : string -> string) =
   match event with
   | Rounds_lib.Round.Event.Song song ->
-    let%bind.Or_error song_data = Rounds_lib.Round.Song.create
-      ~filepath:(Filename.concat (Rounds_lib.Base_path.get_path base_path) song.song.filepath)
-      ~duration:song.song.duration
-      ~fade_in:song.song.fade_in
-      ~fade_out:song.song.fade_out in
-    Rounds_lib.Round.Event.Song {song=song_data; name=song.name; dance=song.dance} |> Or_error.return
-  | Break _ -> Ok event
+    Rounds_lib.Round.Event.Song
+      { name = song.name
+      ; dance = song.dance
+      ; song = { song.song with filepath = f song.song.filepath }
+      }
+  | Break _ -> event
 ;;
 
 let convert_round
@@ -22,34 +21,40 @@ let convert_round
   =
   let round = Rounds_lib.Round.read_from_file ~filepath:round_sexp_path in
   let%bind.Or_error () = Rounds_lib.Base_path.instantiate artifact_path in
-  let%bind.Or_error sources =
-    List.mapi round.events ~f:(fun index (event : Rounds_lib.Round.Event.t) ->
-      let%bind.Or_error event = prepend_base_dir ~base_path:source_path ~event in
-      match event with
-      | Song { song; _ } ->
-        let output_path =
-          Rounds_lib.Base_path.derive_path
-            artifact_path
-            ~path:(Printf.sprintf "%d_trimmed.mp3" index)
-        in
-        let%map.Or_error () = Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song ~output_path () in
-        output_path
-      | Break break ->
-        let output_path =
-          Rounds_lib.Base_path.derive_path
-            artifact_path
-            ~path:(Printf.sprintf "break_%d.mp3" break.duration)
-        in
-        let%map.Or_error () =
-          Rounds_lib.Ffmpeg.generate_break ~ffmpeg_path ~break ~output_path ()
-        in
-        output_path)
-    |> Or_error.all
+  (* Deduplicate the filenames *)
+  let unique_artifacts =
+    List.stable_dedup round.events ~compare:(fun event1 event2 ->
+      let path1 = Rounds_lib.Round.Event.to_string event1 in
+      let path2 = Rounds_lib.Round.Event.to_string event2 in
+      String.compare path1 path2)
   in
+  let%bind.Or_error artifacts =
+    List.map unique_artifacts ~f:(fun event ->
+      let output_path =
+        Rounds_lib.Round.Event.to_string event
+        |> Rounds_lib.Base_path.derive_path artifact_path
+      in
+      let source =
+        map_path ~event ~f:(fun song_path ->
+          Filename.concat (Rounds_lib.Base_path.get_path source_path) song_path)
+      in
+      let output_path = [%string "%{output_path}.mp3"] in
+      print_endline output_path;
+      let%bind.Or_error () =
+        match source with
+        | Rounds_lib.Round.Event.Song song ->
+          Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song:song.song ~output_path ()
+        | Break break ->
+          Rounds_lib.Ffmpeg.generate_break ~ffmpeg_path ~break ~output_path ()
+      in
+      Ok output_path)
+    |> Or_error.combine_errors
+  in
+  (* Concat everything *)
   Rounds_lib.Ffmpeg.ffmpeg_concat
     ~ffmpeg_path
-    ~sources
-    ~artifacts_path:(Rounds_lib.Base_path.get_path artifact_path)
+    ~sources:artifacts
+    ~artifacts_path:artifact_path
     ~output_path:output_mp3_path
     ()
 ;;

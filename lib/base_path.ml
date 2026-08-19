@@ -16,7 +16,7 @@ let create ~base_dir =
 ;;
 
 let get_path t = t
-let derive_path t ~path = Filename.concat t path
+let derive_path t path = Filename.concat t path
 
 let instantiate t =
   Core_unix.mkdir_p ~perm:0o755 (get_path t);

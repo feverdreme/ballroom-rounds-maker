@@ -19,7 +19,7 @@ val generate_break
 val ffmpeg_concat
   :  ?ffmpeg_path:string
   -> sources:string list
-  -> artifacts_path:string
+  -> artifacts_path:Base_path.t
   -> output_path:string
   -> unit
   -> unit Or_error.t

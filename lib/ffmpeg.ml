@@ -65,15 +65,15 @@ let make_absolute (path : string) : string =
 let create_concat_list ~sources ~output_path : unit =
   Out_channel.with_file output_path ~f:(fun output_channel ->
     List.iter sources ~f:(fun source ->
-      Printf.fprintf output_channel "file %s\n" (make_absolute source)))
+      Printf.fprintf output_channel "file '%s'\n" (make_absolute source)))
 ;;
 
 let ffmpeg_concat ?(ffmpeg_path = "ffmpeg") ~sources ~artifacts_path ~output_path () =
   Printf.printf "Concatenating files...\n";
   Printf.printf "sourcelist=[%s]\n" (String.concat ~sep:"; " sources);
-  Printf.printf "artifacts_path=%s\n" artifacts_path;
+  Printf.printf "artifacts_path=%s\n" (Base_path.get_path artifacts_path);
   Printf.printf "output_path=%s\n" output_path;
-  let concat_list_path = Filename.concat artifacts_path "concat_list.txt" in
+  let concat_list_path = Base_path.derive_path artifacts_path "concat_list.txt" in
   create_concat_list ~sources ~output_path:concat_list_path;
   match
     Sys_unix.command
