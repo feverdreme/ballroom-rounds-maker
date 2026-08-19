@@ -68,15 +68,6 @@ let create_concat_list ~sources ~output_path : unit =
       Printf.fprintf output_channel "file %s\n" (make_absolute source)))
 ;;
 
-(* CR for aide: Is there a [%log.info] log ppx? Respond in this thread
-   XCR aide for jeffrey: yes, `ppx_log` provides [%log.info]/[%log.error]/etc.,
-   but it's built for Async's [Async_log] (or `Log_kernel`) — it expects a
-   `Log.t` in scope (or uses `Async.Log.Global`), which pulls in the async
-   dependency. This project is synchronous (`core_unix`, no async), so
-   there's no `Log.t` to log through without adding that dependency. Given
-   this is a one-off script, I left the plain [Printf.printf] calls as-is
-   rather than pull in async just for logging; happy to wire up ppx_log if
-   this code is meant to grow into something longer-lived. *)
 let ffmpeg_concat ?(ffmpeg_path = "ffmpeg") ~sources ~artifacts_path ~output_path () =
   Printf.printf "Concatenating files...\n";
   Printf.printf "sourcelist=[%s]\n" (String.concat ~sep:"; " sources);
