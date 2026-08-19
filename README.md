@@ -2,71 +2,66 @@
 
 An OCaml CLI tool that assembles ballroom dance competition "rounds" -- single
 MP3 files composed of multiple songs (one per dance style) separated by
-configurable silence breaks. Rounds are defined in `.rounds` files using an
-INI-style markup language with configurable song duration, break duration, and
-fade timing. The tool orchestrates **ffmpeg** to trim, generate silence, and
-concatenate everything into one output file.
+configurable silence breaks. A round is described as a `Round.t` value
+serialized to a sexp file. The tool orchestrates **ffmpeg** to trim each song,
+generate silence for breaks, and concatenate everything into one output file.
 
 ## Prerequisites
 
 - **OCaml** (with opam)
 - **Dune 3**
-- **opam packages:** `core`, `unix`, `menhir`
-- **ffmpeg** -- either on your `PATH` or placed as a binary at `./ffmpeg` in the
-  project root (the code invokes `./ffmpeg` by default)
+- **opam packages:** `core`, `core_unix`, `unix`, `ppx_jane`
+- **ffmpeg** -- must be on your `PATH`, or pass `-ffmpeg-path` to point at a
+  specific binary
 
 Install OCaml dependencies:
 
 ```bash
-opam install core menhir
+opam install core core_unix ppx_jane
 ```
 
-## The `.rounds` Format
+## The round sexp format
 
-Rounds are defined in `.rounds` files with an INI-style syntax. A `[defaults]`
-section sets global timing, and `[round name]` sections list songs and breaks:
+A round is a `Round.t` sexp file with a `name` and a list of `events`. Each
+event is either a `Song` (with a `filepath` relative to `-source-path`,
+`duration`, `fade_in`, and `fade_out` in seconds, plus optional `name` and
+`dance`) or a `Break` (with a `duration` in seconds):
 
-```ini
-# Comments start with # or ;
-[defaults]
-song_duration = 90
-break_duration = 10
-fade_in = 5
-fade_out = 5
-
-[round standard_champ_1heat]
-Standard/Waltz/Don't Be So Shy (Slow Waltz 29).mp3
-break
-Standard/Tango/The Punch and Judy Tango.mp3 | start=15 | duration=80
-break 15
-Standard/VWaltz/Love Story - Indila.mp3 | fade_in=3 | fade_out=8
-break
-Standard/Fox/Better Together.mp3
-break
-Standard/Quickstep/Larger Than Life.mp3 | end=105
+```lisp
+((name standard_champ_1heat)
+ (events
+  ((Song
+    (song
+     ((filepath "Standard/Waltz/Don't Be So Shy (Slow Waltz 29).mp3")
+      (duration 90) (fade_in 5) (fade_out 5)))
+    (name ()) (dance ()))
+   (Break ((duration 10)))
+   (Song
+    (song
+     ((filepath "Standard/Tango/The Punch and Judy Tango.mp3")
+      (duration 80) (fade_in 5) (fade_out 5)))
+    (name ()) (dance ()))
+   (Break ((duration 15))))))
 ```
 
-- **Song entries** are relative paths under `hellrounds_source/`. Per-song
-  overrides use `| key=value` syntax: `start`, `end`, `duration`, `fade_in`,
-  `fade_out`.
-- **`break`** uses the default break duration. **`break N`** overrides it with
-  `N` seconds.
-- **`[defaults]`** is optional -- if omitted, defaults are: `song_duration=90`,
-  `break_duration=10`, `fade_in=5`, `fade_out=5`.
+Sample round files live in [rounds/](rounds/). `Round.t` values are typically
+produced programmatically (via `Round.save_to_file`) rather than hand-written.
 
 ## How It Works
 
-The pipeline runs in three stages:
+`bin/main.ml` reads a `Round.t` sexp file and runs the pipeline in
+`convert_round`:
 
-1. **Create artifacts** -- Each entry is turned into an `artifact`. Songs are
-   copied from `hellrounds_source/` into `hellrounds_source_artifacts/` with
-   normalized filenames. Break entries produce (or reuse cached) silent MP3
-   files.
-2. **Trim** -- Each `Song` artifact is trimmed with configurable start time,
-   duration, fade-in, and fade-out (resolved against defaults) via ffmpeg.
-   `Break` artifacts pass through unchanged.
-3. **Concatenate** -- All artifact paths are written to a concat demuxer list
-   file and ffmpeg produces the final MP3 (192 kbps).
+1. **Deduplicate events** -- events are stable-deduped by their string
+   representation (song path + fade/duration, or break duration) so repeated
+   entries reuse the same artifact.
+2. **Create + trim artifacts** -- each unique `Song` is trimmed from
+   `-source-path` with its configured duration, fade-in, and fade-out via
+   ffmpeg; each unique `Break` becomes a generated silent MP3 (skipped if it
+   already exists). Artifact filenames are derived from the event's string
+   representation under `-artifact-path`.
+3. **Concatenate** -- all artifact paths are written to an ffmpeg concat
+   demuxer list and ffmpeg produces the final MP3 (192 kbps) at `-output`.
 
 ## Usage
 
@@ -79,15 +74,30 @@ dune build
 ### Run
 
 ```bash
-dune exec bin/main.exe -- <rounds_file>
+dune exec bin/main.exe -- \
+  -round-file <round.sexp> \
+  -output <output.mp3> \
+  -artifact-path <artifacts_dir> \
+  [-source-path <source_dir>] \
+  [-ffmpeg-path <path_to_ffmpeg>]
 ```
 
 For example:
 
 ```bash
-dune exec bin/main.exe -- sample.rounds
+dune exec bin/main.exe -- \
+  -round-file rounds/standard_champ_1heat.sexp \
+  -output rounds_output/standard_champ_1heat.mp3 \
+  -artifact-path hellrounds_source_artifacts \
+  -source-path hellrounds_source
 ```
 
-Run from the project root so that the relative paths `hellrounds_source/`,
-`hellrounds_source_artifacts/`, and `./ffmpeg` resolve correctly. Output MP3
-files are written to the `rounds_output/` directory.
+Flags:
+
+- `-round-file` (required) -- sexp file describing the round (`Round.t`).
+- `-output` (required) -- output MP3 path.
+- `-artifact-path` (required) -- directory for intermediate artifacts
+  (trimmed songs, breaks, concat list). Created if it doesn't exist.
+- `-source-path` (optional, default `.`) -- base directory that song
+  `filepath`s are resolved against.
+- `-ffmpeg-path` (optional, default `ffmpeg`) -- path to the ffmpeg binary.
