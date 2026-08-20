@@ -1,5 +1,6 @@
 (executable
  (name main)
+ (modules main)
  (libraries
   core
   core_unix
@@ -8,4 +9,10 @@
   core_unix.filename_unix
   unix
   rounds_lib)
+ (preprocess (pps ppx_jane)))
+
+(executable
+ (name tui)
+ (modules tui)
+ (libraries core core_unix.command_unix rounds_tui_lib)
  (preprocess (pps ppx_jane)))
