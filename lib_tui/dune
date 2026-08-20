@@ -1,0 +1,5 @@
+(library
+ (name rounds_tui_lib)
+ (libraries core core_unix.sys_unix async bonsai bonsai_term rounds_lib)
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))
