@@ -37,7 +37,7 @@ end
 module Event = struct
   type t =
     | Song of
-        { song : Song.t
+        { song_data : Song.t
         ; name : string option
         ; dance : string option
         }
@@ -45,7 +45,7 @@ module Event = struct
   [@@deriving sexp]
 
   let to_string = function
-    | Song s -> Song.to_string s.song
+    | Song s -> Song.to_string s.song_data
     | Break b -> Break.to_string b
   ;;
 end

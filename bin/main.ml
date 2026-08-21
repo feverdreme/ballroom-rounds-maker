@@ -6,7 +6,7 @@ let map_path ~event ~(f : string -> string) =
     Rounds_lib.Round.Event.Song
       { name = song.name
       ; dance = song.dance
-      ; song = { song.song with filepath = f song.song.filepath }
+      ; song_data = { song.song_data with filepath = f song.song_data.filepath }
       }
   | Break _ -> event
 ;;
@@ -43,7 +43,7 @@ let convert_round
       let%bind.Or_error () =
         match source with
         | Rounds_lib.Round.Event.Song song ->
-          Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song:song.song ~output_path ()
+          Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song:song.song_data ~output_path ()
         | Break break ->
           Rounds_lib.Ffmpeg.generate_break ~ffmpeg_path ~break ~output_path ()
       in

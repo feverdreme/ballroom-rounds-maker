@@ -24,7 +24,7 @@ end
 module Event : sig
   type t =
     | Song of
-        { song : Song.t
+        { song_data : Song.t
         ; name : string option
         ; dance : string option
         }

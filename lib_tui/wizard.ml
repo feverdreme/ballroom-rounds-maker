@@ -382,7 +382,7 @@ and ask_song_dance ~song ~name ~on_song ~cancel () =
     ~on_back:(fun () -> ask_song_name ~song ~on_song ~cancel ())
     ~on_submit:(fun dance_input ->
       let dance = if String.is_empty (String.strip dance_input) then None else Some dance_input in
-      on_song (Round.Event.Song { song; name; dance }))
+      on_song (Round.Event.Song { song_data=song; name; dance }))
     ()
 
 and edit_pick_round ~rounds_dir ~source_dir () =
@@ -528,7 +528,7 @@ and edit_event ~rounds_dir ~source_dir ~path ~name ~events ~idx () =
       ~on_break:(fun duration -> rebuild (Round.Event.Break { duration }))
       ~buffer:(Int.to_string duration)
       ()
-  | Round.Event.Song { song; _ } ->
+  | Round.Event.Song { song_data = song; _ } ->
     ask_song_duration ~filepath:song.filepath ~on_song:rebuild ~cancel ~buffer:(Int.to_string song.duration) ()
 ;;
 
