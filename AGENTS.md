@@ -1,8 +1,5 @@
 # Project instructions
 
-These instructions are shared conceptually with `AGENTS.md` for Codex. Keep
-both files aligned when changing repository conventions.
-
 ## Overview
 
 This is an OCaml/Dune CLI and TUI for converting ballroom-dance competition
@@ -21,15 +18,28 @@ the resulting artifacts.
 ## Development commands
 
 ```bash
+# Build all libraries and executables
 dune build
-dune exec bin/main.exe -- -round-file <round.sexp> -output <output.mp3> -artifact-path <artifacts_dir> [-source-path <source_dir>] [-ffmpeg-path <ffmpeg_path>]
+
+# Run the converter
+dune exec bin/main.exe -- \
+  -round-file <round.sexp> \
+  -output <output.mp3> \
+  -artifact-path <artifacts_dir> \
+  [-source-path <source_dir>] \
+  [-ffmpeg-path <ffmpeg_path>]
+
+# Run the TUI
 dune exec bin/tui.exe
 ```
 
 Dependencies are managed with opam. The Dune files use `core`, `core_unix`,
 `unix`, `ppx_jane`, `async`, `bonsai`, and `bonsai_term`. `ffmpeg` must be on
-`PATH` unless `-ffmpeg-path` is supplied. There is currently no test suite;
-run `dune build` after code changes.
+`PATH` unless `-ffmpeg-path` is supplied.
+
+There is currently no test suite. Run `dune build` after code changes and add
+focused tests when changing behavior that can be tested without external audio
+files or `ffmpeg`.
 
 ## Implementation notes
 
