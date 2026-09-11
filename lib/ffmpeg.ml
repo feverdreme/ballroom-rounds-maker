@@ -1,4 +1,5 @@
 open! Core
+module Round = Rounds_model.Round
 
 let seconds_to_ffmpeg_time ~seconds =
   let hours = seconds / 3600 in

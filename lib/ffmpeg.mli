@@ -1,4 +1,5 @@
 open! Core
+module Round = Rounds_model.Round
 
 val trim
   :  ?ffmpeg_path:string
