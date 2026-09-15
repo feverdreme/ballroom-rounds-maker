@@ -21,6 +21,7 @@ let has_extension path ~extensions =
   | _, Some ext -> List.mem extensions (String.lowercase ("." ^ ext)) ~equal:String.equal
 ;;
 
+(* Return [path] relative to [root], or unchanged when it is outside [root]. *)
 let relative_to ~root path =
   let root = if String.is_suffix root ~suffix:"/" then root else root ^ "/" in
   match String.chop_prefix path ~prefix:root with
@@ -29,11 +30,16 @@ let relative_to ~root path =
 ;;
 
 let list_files_by_extension_abs ~root ~extensions =
-  Or_error.try_with (fun () ->
-    if not (Sys_unix.is_directory_exn root) then failwithf "%s is not a directory" root ();
-    walk_abs root
-    |> List.filter ~f:(has_extension ~extensions)
-    |> List.sort ~compare:String.compare)
+  let%bind.Or_error is_directory =
+    Or_error.try_with (fun () -> Sys_unix.is_directory_exn root)
+  in
+  if not is_directory
+  then Or_error.errorf "%s is not a directory" root
+  else
+    Ok
+      (walk_abs root
+       |> List.filter ~f:(has_extension ~extensions)
+       |> List.sort ~compare:String.compare)
 ;;
 
 let list_files_by_extension ~root ~extensions =
