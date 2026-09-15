@@ -10,14 +10,15 @@ generate silence for breaks, and concatenate everything into one output file.
 
 - **OCaml** (with opam)
 - **Dune 3**
-- **opam packages:** `core`, `core_unix`, `unix`, `ppx_jane`
+- **opam packages:** `core`, `core_unix`, `unix`, `ppx_jane`, `async`,
+  `bonsai`, `bonsai_web`, `js_of_ocaml`, and `cohttp-async`
 - **ffmpeg** -- must be on your `PATH`, or pass `-ffmpeg-path` to point at a
   specific binary
 
 Install OCaml dependencies:
 
 ```bash
-opam install core core_unix ppx_jane
+opam install core core_unix ppx_jane async bonsai bonsai_web js_of_ocaml cohttp-async
 ```
 
 ## The round sexp format
@@ -31,13 +32,13 @@ event is either a `Song` (with a `filepath` relative to `-source-path`,
 ((name standard_champ_1heat)
  (events
   ((Song
-    (song
+    (song_data
      ((filepath "Standard/Waltz/Don't Be So Shy (Slow Waltz 29).mp3")
       (duration 90) (fade_in 5) (fade_out 5)))
     (name ()) (dance ()))
    (Break ((duration 10)))
    (Song
-    (song
+    (song_data
      ((filepath "Standard/Tango/The Punch and Judy Tango.mp3")
       (duration 80) (fade_in 5) (fade_out 5)))
     (name ()) (dance ()))
@@ -72,6 +73,39 @@ dune build
 ```
 
 ### Run
+
+#### Web editor
+
+The web editor has the same round-authoring capabilities as the terminal UI:
+create or open a round, add and edit songs and breaks, reorder or delete
+events, rename the round, and save it as a sexp file.
+
+```bash
+dune exec bin/web.exe
+```
+
+Then open <http://127.0.0.1:8080>. The server runs only on the local loopback
+interface. Enter the directory where round sexp files should live and the
+directory containing the source audio. The browser does not receive access to
+the filesystem itself; it exchanges S-expression messages with the local OCaml
+server, which performs the reads and writes.
+
+Use a different port if needed:
+
+```bash
+dune exec bin/web.exe -- -port 9090
+```
+
+The web editor creates and edits round descriptions. Use the converter below
+to generate the concatenated MP3.
+
+#### Terminal editor
+
+```bash
+dune exec bin/tui.exe
+```
+
+#### MP3 converter
 
 ```bash
 dune exec bin/main.exe -- \

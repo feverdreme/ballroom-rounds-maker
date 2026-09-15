@@ -9,10 +9,20 @@
   core_unix.filename_unix
   unix
   rounds_lib)
- (preprocess (pps ppx_jane)))
+ (preprocess
+  (pps ppx_jane)))
 
 (executable
  (name tui)
  (modules tui)
  (libraries core core_unix.command_unix rounds_tui_lib)
- (preprocess (pps ppx_jane)))
+ (preprocess
+  (pps ppx_jane)))
+
+(executable
+ (name web)
+ (modules web)
+ (libraries core core_unix.command_unix rounds_web_server)
+ (link_deps ../lib_web/client.bc.js)
+ (preprocess
+  (pps ppx_jane)))

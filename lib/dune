@@ -1,4 +1,13 @@
 (library
+ (name rounds_model)
+ (modules round)
+ (libraries core)
+ (preprocess
+  (pps ppx_jane)))
+
+(library
  (name rounds_lib)
- (libraries core core_unix core_unix.sys_unix unix)
- (preprocess (pps ppx_jane)))
+ (modules rounds_lib base_path ffmpeg file_browser round_store)
+ (libraries core core_unix core_unix.sys_unix unix rounds_model)
+ (preprocess
+  (pps ppx_jane)))

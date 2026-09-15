@@ -1,0 +1,58 @@
+(library
+ (name rounds_web_protocol)
+ (modules protocol)
+ (libraries core rounds_model)
+ (preprocess
+  (pps ppx_jane)))
+
+(library
+ (name rounds_web_server)
+ (modules server web_assets)
+ (libraries
+  async
+  cohttp-async
+  core
+  core_unix.command_unix
+  rounds_lib
+  rounds_web_protocol
+  uri)
+ (preprocess
+  (pps ppx_jane)))
+
+(executable
+ (name client)
+ (modules client)
+ (modes js)
+ (libraries
+  async_js
+  bonsai_web
+  core
+  js_of_ocaml
+  rounds_model
+  rounds_web_protocol)
+ (js_of_ocaml
+  (flags
+   (:standard --effects=cps)))
+ (preprocess
+  (pps ppx_jane bonsai.ppx_bonsai)))
+
+(test
+ (name protocol_round_trip_test)
+ (modules protocol_round_trip_test)
+ (libraries core rounds_model rounds_web_protocol)
+ (preprocess
+  (pps ppx_jane)))
+
+(test
+ (name server_test)
+ (modules server_test)
+ (libraries
+  async
+  cohttp-async
+  core
+  core_unix
+  rounds_model
+  rounds_web_protocol
+  rounds_web_server)
+ (preprocess
+  (pps ppx_jane)))

@@ -14,6 +14,8 @@ the resulting artifacts.
 
 - `lib/` contains the `rounds_lib` library (`Round`, `Base_path`, and `Ffmpeg`).
 - `lib_tui/` contains the Bonsai terminal UI in `rounds_tui_lib`.
+- `lib_web/` contains the shared sexp protocol, Bonsai web client, and local
+  Async/Cohttp server.
 - `bin/main.ml` is the MP3 conversion CLI.
 - `bin/tui.ml` is the terminal UI entry point.
 - `README.md` documents the current S-expression input format and CLI flags.
@@ -24,12 +26,14 @@ the resulting artifacts.
 dune build
 dune exec bin/main.exe -- -round-file <round.sexp> -output <output.mp3> -artifact-path <artifacts_dir> [-source-path <source_dir>] [-ffmpeg-path <ffmpeg_path>]
 dune exec bin/tui.exe
+dune exec bin/web.exe
 ```
 
 Dependencies are managed with opam. The Dune files use `core`, `core_unix`,
-`unix`, `ppx_jane`, `async`, `bonsai`, and `bonsai_term`. `ffmpeg` must be on
-`PATH` unless `-ffmpeg-path` is supplied. There is currently no test suite;
-run `dune build` after code changes.
+`unix`, `ppx_jane`, `async`, `bonsai`, `bonsai_term`, `bonsai_web`,
+`js_of_ocaml`, and `cohttp-async`. `ffmpeg` must be on
+`PATH` unless `-ffmpeg-path` is supplied. Run `dune build` after code changes;
+the web protocol's serialization round-trip tests run through `dune runtest`.
 
 ## Implementation notes
 
@@ -37,6 +41,10 @@ run `dune build` after code changes.
   shape when changing the model.
 - `Round.Song.create` validates that fade-in plus fade-out does not exceed the
   song duration.
+- Keep the web protocol native to the OCaml codebase: send S-expressions over
+  HTTP and reuse derived sexp converters rather than adding parallel JSON DTOs.
+- Keep web-protocol tests focused on serialization round trips; do not broaden
+  them into API, UI, filesystem, or smoke tests unless explicitly requested.
 - `bin/main.ml` stable-deduplicates events by `Round.Event.to_string`, creates
   or reuses artifact files, and then invokes the concat step.
 - Paths are resolved relative to the supplied source/artifact directories.
