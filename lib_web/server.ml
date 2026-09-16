@@ -28,39 +28,41 @@ let respond_error sexp_of error =
   respond_sexp (Or_error.sexp_of_t sexp_of (Error error))
 ;;
 
-let base_paths (workspace : Protocol.workspace) =
-  let%bind.Or_error rounds_dir =
-    Rounds_lib.Base_path.create ~base_dir:(String.strip workspace.rounds_dir)
-  in
-  let%map.Or_error source_dir =
-    Rounds_lib.Base_path.create ~base_dir:(String.strip workspace.source_dir)
-  in
-  rounds_dir, source_dir
+let rounds_path (workspace : Protocol.workspace) =
+  Rounds_lib.Base_path.create ~base_dir:(String.strip workspace.rounds_dir)
 ;;
 
-let initialize (request : Protocol.initialize_request) =
-  let%bind.Or_error rounds_dir, source_dir = base_paths request in
-  let rounds_result =
+let source_path (workspace : Protocol.workspace) =
+  Rounds_lib.Base_path.create ~base_dir:(String.strip workspace.source_dir)
+;;
+
+let list_rounds (request : Protocol.list_rounds_request) =
+  let%bind.Or_error rounds_dir = rounds_path request in
+  let%map.Or_error rounds =
     if Sys_unix.file_exists_exn (Rounds_lib.Base_path.get_path rounds_dir)
     then Rounds_lib.Round_store.list ~rounds_dir
     else Ok []
   in
-  let%bind.Or_error rounds = rounds_result in
-  let%map.Or_error songs =
-    Rounds_lib.File_browser.list_files_by_extension
-      ~root:(Rounds_lib.Base_path.get_path source_dir)
-      ~extensions:[ ".mp3"; ".wav"; ".m4a" ]
-  in
-  let rounds =
-    List.map rounds ~f:(fun (summary : Rounds_lib.Round_store.summary) ->
-      Protocol.
-        { path = summary.path; name = summary.name; event_count = summary.event_count })
-  in
+  List.map rounds ~f:(fun (summary : Rounds_lib.Round_store.summary) ->
+    Protocol.
+      { path = summary.path; name = summary.name; event_count = summary.event_count })
+;;
+
+let list_songs (request : Protocol.list_songs_request) =
+  let%bind.Or_error source_dir = source_path request in
+  Rounds_lib.File_browser.list_files_by_extension
+    ~root:(Rounds_lib.Base_path.get_path source_dir)
+    ~extensions:[ ".mp3"; ".wav"; ".m4a" ]
+;;
+
+let initialize (request : Protocol.initialize_request) =
+  let%bind.Or_error rounds = list_rounds request in
+  let%map.Or_error songs = list_songs request in
   Protocol.{ rounds; songs }
 ;;
 
 let load_round (request : Protocol.load_request) =
-  let%bind.Or_error rounds_dir, _ = base_paths request.workspace in
+  let%bind.Or_error rounds_dir = rounds_path request.workspace in
   Rounds_lib.Round_store.load ~rounds_dir ~path:request.path
 ;;
 
@@ -88,7 +90,7 @@ let validate_round (round : Round.t) =
 ;;
 
 let save_round (request : Protocol.save_request) =
-  let%bind.Or_error rounds_dir, _ = base_paths request.workspace in
+  let%bind.Or_error rounds_dir = rounds_path request.workspace in
   let%bind.Or_error () = validate_round request.round in
   (* CR aide for jeffrey: A new round silently overwrites an existing file when its
      sanitized name collides. This is especially easy to hit because every new editor
@@ -159,6 +161,20 @@ let callback ~app_js ~body _socket request =
       ~of_sexp:Protocol.initialize_request_of_sexp
       ~sexp_of_result:Protocol.sexp_of_initialize_result
       ~handle:initialize
+  | `POST, "/api/rounds" ->
+    handle_post
+      ~body
+      ~request
+      ~of_sexp:Protocol.list_rounds_request_of_sexp
+      ~sexp_of_result:Protocol.sexp_of_list_rounds_result
+      ~handle:list_rounds
+  | `POST, "/api/songs" ->
+    handle_post
+      ~body
+      ~request
+      ~of_sexp:Protocol.list_songs_request_of_sexp
+      ~sexp_of_result:Protocol.sexp_of_list_songs_result
+      ~handle:list_songs
   | `POST, "/api/load" ->
     handle_post
       ~body

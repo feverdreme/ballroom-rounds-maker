@@ -73,8 +73,71 @@ let assert_round_saves_and_loads () =
       | Ok loaded -> assert (Sexp.equal (Round.sexp_of_t round) (Round.sexp_of_t loaded)))
 ;;
 
+let assert_catalog_endpoints_rescan () =
+  let directory =
+    Core_unix.mkdtemp
+      (Filename.concat Filename.temp_dir_name "ballroom-rounds-maker-catalog-test-")
+  in
+  let round_file = Filename.concat directory "external.sexp" in
+  let song_file = Filename.concat directory "external.mp3" in
+  Monitor.protect
+    ~finally:(fun () ->
+      if Sys_unix.file_exists_exn round_file then Core_unix.unlink round_file;
+      if Sys_unix.file_exists_exn song_file then Core_unix.unlink song_file;
+      Core_unix.rmdir directory;
+      return ())
+    (fun () ->
+      let workspace = Protocol.{ rounds_dir = directory; source_dir = directory } in
+      let list_rounds () =
+        let%map status, response =
+          call
+            "/api/rounds"
+            (Protocol.sexp_of_list_rounds_request workspace |> Sexp.to_string)
+        in
+        assert (Cohttp.Code.code_of_status status = 200);
+        Or_error.t_of_sexp Protocol.list_rounds_result_of_sexp response |> Or_error.ok_exn
+      in
+      let list_songs () =
+        let%map status, response =
+          call
+            "/api/songs"
+            (Protocol.sexp_of_list_songs_request workspace |> Sexp.to_string)
+        in
+        assert (Cohttp.Code.code_of_status status = 200);
+        Or_error.t_of_sexp Protocol.list_songs_result_of_sexp response |> Or_error.ok_exn
+      in
+      let%bind rounds_before = list_rounds ()
+      and songs_before = list_songs () in
+      assert (List.is_empty rounds_before);
+      assert (List.is_empty songs_before);
+      Round.save_to_file
+        Round.{ events = [ Break { duration = 5 } ]; name = "External round" }
+        ~output_path:round_file;
+      Out_channel.write_all song_file ~data:"audio";
+      let%bind rounds_after_add = list_rounds ()
+      and songs_after_add = list_songs () in
+      assert (
+        List.equal
+          (fun (left : Protocol.round_summary) (right : Protocol.round_summary) ->
+            String.equal left.path right.path
+            && String.equal left.name right.name
+            && Int.equal left.event_count right.event_count)
+          rounds_after_add
+          [ { Protocol.path = "external.sexp"; name = "External round"; event_count = 1 }
+          ]);
+      assert (List.equal String.equal songs_after_add [ "external.mp3" ]);
+      Core_unix.unlink round_file;
+      Core_unix.unlink song_file;
+      let%bind rounds_after_remove = list_rounds ()
+      and songs_after_remove = list_songs () in
+      assert (List.is_empty rounds_after_remove);
+      assert (List.is_empty songs_after_remove);
+      return ())
+;;
+
 let () =
   Thread_safe.block_on_async_exn (fun () ->
     let%bind () = assert_application_error_is_readable () in
-    assert_round_saves_and_loads ())
+    let%bind () = assert_round_saves_and_loads () in
+    assert_catalog_endpoints_rescan ())
 ;;
