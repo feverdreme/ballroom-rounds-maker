@@ -288,7 +288,10 @@ let apply_action_unblocked (model : Model.t) (action : Action.t) =
     update_editor model ~f:(fun editor ->
       { editor with draft = { editor.draft with name } })
   | Songs_refreshed (_, Error error) ->
-    { model with loading = false; error = Some (Error.to_string_hum error) }
+    let error = Error.to_string_hum error in
+    update_song_form
+      { model with loading = false; error = Some error }
+      ~f:(fun form -> { form with error = Some error })
   | Songs_refreshed (form, Ok songs) ->
     let catalog = Option.map model.catalog ~f:(fun catalog -> { catalog with songs }) in
     { model with catalog; dialog = Song_form form; loading = false; error = None }
