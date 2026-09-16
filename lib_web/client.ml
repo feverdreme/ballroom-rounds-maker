@@ -127,7 +127,7 @@ module Action = struct
     | Cancel_dialog
     | Request_dashboard
     | Leave_editor
-    | Saved of Protocol.save_result Or_error.t
+    | Saved of Round.t * Protocol.save_result Or_error.t
 end
 
 open Model
@@ -395,23 +395,23 @@ let apply_action _context (model : Model.t) (action : Action.t) =
     ; error = None
     ; message = None
     }
-  | Saved (Error error) ->
+  | Saved (_, Error error) ->
     { model with loading = false; error = Some (Error.to_string_hum error) }
-  | Saved (Ok saved) ->
+  | Saved (submitted, Ok saved) ->
     (match model.editor with
      | None -> { model with loading = false }
      | Some editor ->
-       (* CR aide for jeffrey: The request saved the draft captured by [save_effect], but
+       (* XCR aide for jeffrey: The request saved the draft captured by [save_effect], but
           this reducer marks the editor's current draft as saved. Since the form remains
           editable while [loading], edits made during the request are falsely shown as
           saved and can be lost on navigation. Carry the submitted round in [Saved], or
           disable every editing action until the response arrives. *)
-       let editor = { editor with path = Some saved.path; saved = editor.draft } in
+       let editor = { editor with path = Some saved.path; saved = submitted } in
        let summary =
          Protocol.
            { path = saved.path
-           ; name = editor.draft.name
-           ; event_count = List.length editor.draft.events
+           ; name = submitted.name
+           ; event_count = List.length submitted.events
            }
        in
        let catalog =
@@ -453,9 +453,8 @@ let post ~path ~sexp ~of_sexp =
 ;;
 
 let initialize_effect workspace inject =
-  let open Effect.Let_syntax in
-  let%bind () = inject Action.Start_request in
-  let%bind response =
+  let%bind.Effect () = inject Action.Start_request in
+  let%bind.Effect response =
     Effect.of_deferred_fun
       (fun workspace ->
         post
@@ -468,9 +467,8 @@ let initialize_effect workspace inject =
 ;;
 
 let refresh_rounds_effect workspace inject =
-  let open Effect.Let_syntax in
-  let%bind () = inject Action.Start_request in
-  let%bind response =
+  let%bind.Effect () = inject Action.Start_request in
+  let%bind.Effect response =
     Effect.of_deferred_fun
       (fun workspace ->
         post
@@ -483,9 +481,8 @@ let refresh_rounds_effect workspace inject =
 ;;
 
 let refresh_songs_effect workspace form inject =
-  let open Effect.Let_syntax in
-  let%bind () = inject Action.Start_request in
-  let%bind response =
+  let%bind.Effect () = inject Action.Start_request in
+  let%bind.Effect response =
     Effect.of_deferred_fun
       (fun workspace ->
         post
@@ -526,7 +523,7 @@ let save_effect workspace (editor : Model.editor) inject =
           ~of_sexp:(Or_error.t_of_sexp Protocol.save_result_of_sexp))
       request
   in
-  inject (Saved response)
+  inject (Saved (editor.draft, response))
 ;;
 
 let attr_class name = Vdom.Attr.class_ name

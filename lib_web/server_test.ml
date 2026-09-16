@@ -64,16 +64,34 @@ let assert_round_saves_and_loads () =
         | Error error -> Error.raise error
       in
       let load_request = Protocol.{ workspace; path = saved_path } in
-      let%map load_status, load_response =
+      let%bind load_status, load_response =
         call "/api/load" (Protocol.sexp_of_load_request load_request |> Sexp.to_string)
       in
       assert (Cohttp.Code.code_of_status load_status = 200);
       match Or_error.t_of_sexp Round.t_of_sexp load_response with
       | Error error -> Error.raise error
-      | Ok loaded -> assert (Sexp.equal (Round.sexp_of_t round) (Round.sexp_of_t loaded)))
+      | Ok loaded ->
+        assert (Sexp.equal (Round.sexp_of_t round) (Round.sexp_of_t loaded));
+        (* A path derived for a new round must not replace the existing round with the
+           same name.  Existing rounds instead send their saved path when updating. *)
+        let conflicting_round =
+          Round.{ events = [ Break { duration = 16 } ]; name = round.name }
+        in
+        let conflicting_request = Protocol.{ workspace; path = None; round = conflicting_round } in
+        let%map conflicting_status, conflicting_response =
+          call
+            "/api/save"
+            (Protocol.sexp_of_save_request conflicting_request |> Sexp.to_string)
+        in
+        assert (Cohttp.Code.code_of_status conflicting_status = 200);
+        assert (
+          Result.is_error
+            (Or_error.t_of_sexp Protocol.save_result_of_sexp conflicting_response)))
 ;;
 
 let assert_catalog_endpoints_rescan () =
+  (* Each request must rescan disk so externally created and removed files appear without
+     restarting the server. *)
   let directory =
     Core_unix.mkdtemp
       (Filename.concat Filename.temp_dir_name "ballroom-rounds-maker-catalog-test-")

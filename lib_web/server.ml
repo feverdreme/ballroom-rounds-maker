@@ -28,16 +28,11 @@ let respond_error sexp_of error =
   respond_sexp (Or_error.sexp_of_t sexp_of (Error error))
 ;;
 
-let rounds_path (workspace : Protocol.workspace) =
-  Rounds_lib.Base_path.create ~base_dir:(String.strip workspace.rounds_dir)
-;;
-
-let source_path (workspace : Protocol.workspace) =
-  Rounds_lib.Base_path.create ~base_dir:(String.strip workspace.source_dir)
+let base_path directory = Rounds_lib.Base_path.create ~base_dir:(String.strip directory)
 ;;
 
 let list_rounds (request : Protocol.list_rounds_request) =
-  let%bind.Or_error rounds_dir = rounds_path request in
+  let%bind.Or_error rounds_dir = base_path request.rounds_dir in
   let%map.Or_error rounds =
     if Sys_unix.file_exists_exn (Rounds_lib.Base_path.get_path rounds_dir)
     then Rounds_lib.Round_store.list ~rounds_dir
@@ -49,7 +44,7 @@ let list_rounds (request : Protocol.list_rounds_request) =
 ;;
 
 let list_songs (request : Protocol.list_songs_request) =
-  let%bind.Or_error source_dir = source_path request in
+  let%bind.Or_error source_dir = base_path request.source_dir in
   Rounds_lib.File_browser.list_files_by_extension
     ~root:(Rounds_lib.Base_path.get_path source_dir)
     ~extensions:[ ".mp3"; ".wav"; ".m4a" ]
@@ -62,7 +57,7 @@ let initialize (request : Protocol.initialize_request) =
 ;;
 
 let load_round (request : Protocol.load_request) =
-  let%bind.Or_error rounds_dir = rounds_path request.workspace in
+  let%bind.Or_error rounds_dir = base_path request.workspace.rounds_dir in
   Rounds_lib.Round_store.load ~rounds_dir ~path:request.path
 ;;
 
@@ -90,17 +85,22 @@ let validate_round (round : Round.t) =
 ;;
 
 let save_round (request : Protocol.save_request) =
-  let%bind.Or_error rounds_dir = rounds_path request.workspace in
+  let%bind.Or_error rounds_dir = base_path request.workspace.rounds_dir in
   let%bind.Or_error () = validate_round request.round in
-  (* CR aide for jeffrey: A new round silently overwrites an existing file when its
+  (* XCR aide for jeffrey: A new round silently overwrites an existing file when its
      sanitized name collides. This is especially easy to hit because every new editor
      starts as [Untitled round]. Please either allocate a unique path or reject the save
      when the derived path already exists; otherwise creating a second round can destroy
      the first one. *)
-  let path =
-    Option.value
-      request.path
-      ~default:(Rounds_lib.Round_store.path_for_new_round request.round)
+  let%bind.Or_error path =
+    match request.path with
+    | Some path -> Ok path
+    | None ->
+      let path = Rounds_lib.Round_store.path_for_new_round request.round in
+      let absolute_path = Filename.concat (Rounds_lib.Base_path.get_path rounds_dir) path in
+      if Sys_unix.file_exists_exn absolute_path
+      then Or_error.errorf "A round already exists at %s" path
+      else Ok path
   in
   let%map.Or_error () = Rounds_lib.Round_store.save ~rounds_dir ~path request.round in
   Protocol.{ path }
