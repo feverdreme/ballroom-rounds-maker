@@ -126,7 +126,6 @@ module Action = struct
     | Drop_on of int
     | Cancel_dialog
     | Request_dashboard
-    | Leave_editor
     | Saved of Round.t * Protocol.save_result Or_error.t
 end
 
@@ -217,7 +216,7 @@ let break_form_of_event index = function
   | Song _ -> Model.{ index = Some index; duration = "10"; error = None }
 ;;
 
-let apply_action _context (model : Model.t) (action : Action.t) =
+let apply_action_unblocked (model : Model.t) (action : Action.t) =
   match action with
   | Set_rounds_dir rounds_dir ->
     { model with workspace = { model.workspace with rounds_dir }; error = None }
@@ -266,7 +265,11 @@ let apply_action _context (model : Model.t) (action : Action.t) =
     ; message = None
     }
   | Rounds_refreshed (Error error) ->
-    { model with loading = false; error = Some (Error.to_string_hum error) }
+    { model with
+      loading = false
+    ; dialog = No_dialog
+    ; error = Some (Error.to_string_hum error)
+    }
   | Rounds_refreshed (Ok rounds) ->
     let catalog = Option.map model.catalog ~f:(fun catalog -> { catalog with rounds }) in
     { model with
@@ -387,14 +390,6 @@ let apply_action _context (model : Model.t) (action : Action.t) =
     (match model.editor with
      | Some editor when editor_is_dirty editor -> { model with dialog = Confirm_leave }
      | _ -> { model with page = Dashboard; editor = None; dialog = No_dialog })
-  | Leave_editor ->
-    { model with
-      page = Dashboard
-    ; editor = None
-    ; dialog = No_dialog
-    ; error = None
-    ; message = None
-    }
   | Saved (_, Error error) ->
     { model with loading = false; error = Some (Error.to_string_hum error) }
   | Saved (submitted, Ok saved) ->
@@ -431,6 +426,13 @@ let apply_action _context (model : Model.t) (action : Action.t) =
        ; error = None
        ; message = Some ("Saved to " ^ saved.path)
        })
+;;
+
+let apply_action _context (model : Model.t) (action : Action.t) =
+  match action with
+  | Initialized _ | Loaded _ | Rounds_refreshed _ | Songs_refreshed _ | Saved _ ->
+    apply_action_unblocked model action
+  | _ -> if model.loading then model else apply_action_unblocked model action
 ;;
 
 let post ~path ~sexp ~of_sexp =
@@ -636,10 +638,6 @@ let dashboard_view model catalog inject =
       ]
     else
       List.map rounds ~f:(fun round ->
-        (* CR-soon aide for jeffrey: Round cards remain clickable while a load is in
-           flight. Two quick clicks can complete out of order and open the first round
-           after the user selected the second. Disable these while [model.loading] or
-           attach an id to each request and discard stale responses. *)
         Vdom.Node.button
           [ attr_class "round-card"
           ; Vdom.Attr.on_click (fun _ -> load_effect model.workspace round.path inject)
@@ -900,16 +898,11 @@ let editor_view model catalog editor inject =
         ~on_confirm:(inject (Delete_event index))
         inject
     | Confirm_leave ->
-      let on_confirm =
-        let open Effect.Let_syntax in
-        let%bind () = inject Leave_editor in
-        refresh_rounds_effect model.workspace inject
-      in
       confirm_dialog
         ~title:"Discard unsaved changes?"
         ~body:"Your changes since the last save will be lost."
         ~confirm_label:"Discard changes"
-        ~on_confirm
+        ~on_confirm:(refresh_rounds_effect model.workspace inject)
         inject
   in
   Vdom.Node.div
@@ -973,11 +966,21 @@ let app (local_ graph) =
     Bonsai.state_machine ~default_model:Model.default ~apply_action graph
   in
   let%arr model and inject in
-  match model.Model.page, model.catalog, model.editor with
-  | Configure, _, _ -> configure_view model inject
-  | Dashboard, Some catalog, _ -> dashboard_view model catalog inject
-  | Editor, Some catalog, Some editor -> editor_view model catalog editor inject
-  | _ -> configure_view model inject
+  if model.Model.loading
+  then
+    Vdom.Node.div
+      [ attr_class "shell" ]
+      [ masthead ()
+      ; Vdom.Node.main
+          [ attr_class "panel"; Vdom.Attr.create "role" "status" ]
+          [ text "Working… Please wait." ]
+      ]
+  else (
+    match model.Model.page, model.catalog, model.editor with
+    | Configure, _, _ -> configure_view model inject
+    | Dashboard, Some catalog, _ -> dashboard_view model catalog inject
+    | Editor, Some catalog, Some editor -> editor_view model catalog editor inject
+    | _ -> configure_view model inject)
 ;;
 
 let () = Bonsai_web.Start.start app
