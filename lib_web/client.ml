@@ -34,6 +34,7 @@ module Model = struct
   type song_form =
     { index : int option
     ; search : string
+    ; choosing_file : bool
     ; filepath : string
     ; duration : string
     ; fade_in : string
@@ -184,6 +185,7 @@ let empty_song_form index =
   Model.
     { index
     ; search = ""
+    ; choosing_file = true
     ; filepath = ""
     ; duration = "90"
     ; fade_in = "0"
@@ -199,6 +201,7 @@ let song_form_of_event index = function
     Model.
       { index = Some index
       ; search = ""
+      ; choosing_file = false
       ; filepath = song_data.filepath
       ; duration = Int.to_string song_data.duration
       ; fade_in = Int.to_string song_data.fade_in
@@ -291,7 +294,8 @@ let apply_action_unblocked (model : Model.t) (action : Action.t) =
     { model with catalog; dialog = Song_form form; loading = false; error = None }
   | Set_song_search search -> update_song_form model ~f:(fun form -> { form with search })
   | Set_song_filepath filepath ->
-    update_song_form model ~f:(fun form -> { form with filepath })
+    update_song_form model ~f:(fun form ->
+      { form with filepath; choosing_file = false; error = None })
   | Set_song_duration duration ->
     update_song_form model ~f:(fun form -> { form with duration; error = None })
   | Set_song_fade_in fade_in ->
@@ -741,11 +745,12 @@ let event_view ~event_count ~open_song index event inject =
     ]
 ;;
 
-let song_dialog form songs inject =
+let song_dialog form songs ~on_change_song inject =
   let query = String.lowercase (String.strip form.Model.search) in
+  let selected, others = List.partition_tf songs ~f:(String.equal form.filepath) in
   let matches =
-    songs
-    |> List.filter ~f:(fun path ->
+    selected
+    @ List.filter others ~f:(fun path ->
       String.is_empty query
       || String.is_substring (String.lowercase path) ~substring:query)
     |> Fn.flip List.take 80
@@ -761,7 +766,32 @@ let song_dialog form songs inject =
                @ if String.equal path form.filepath then [ "selected" ] else [])
           ; Vdom.Attr.on_click (fun _ -> inject (Set_song_filepath path))
           ]
-          [ text path ])
+          [ text (if String.equal path form.filepath then "✓ Selected: " ^ path else path)
+          ])
+  in
+  let file_picker =
+    if form.choosing_file
+    then
+      Vdom.Node.div
+        []
+        [ input_field
+            ~label:"Find audio"
+            ~value:form.search
+            ~placeholder:"Type to filter"
+            ~on_input:(fun value -> inject (Set_song_search value))
+            ()
+        ; Vdom.Node.div [ attr_class "search-results" ] choices
+        ]
+    else
+      Vdom.Node.div
+        [ attr_class "selected-song" ]
+        [ Vdom.Node.div
+            []
+            [ Vdom.Node.strong [ attr_class "success" ] [ text "✓ Selected song" ]
+            ; Vdom.Node.div [ attr_class "event-title" ] [ text form.filepath ]
+            ]
+        ; button ~label:"Change song" ~on_click:on_change_song ()
+        ]
   in
   Vdom.Node.div
     [ attr_class "dialog-backdrop" ]
@@ -770,19 +800,7 @@ let song_dialog form songs inject =
         [ Vdom.Node.h2
             []
             [ text (if Option.is_some form.index then "Edit song" else "Add song") ]
-        ; input_field
-            ~label:"Find audio"
-            ~value:form.search
-            ~placeholder:"Type to filter"
-            ~on_input:(fun value -> inject (Set_song_search value))
-            ()
-        ; Vdom.Node.div [ attr_class "search-results" ] choices
-        ; Vdom.Node.div
-            [ attr_class "event-meta" ]
-            [ text
-                ("Selected: "
-                 ^ if String.is_empty form.filepath then "none" else form.filepath)
-            ]
+        ; file_picker
         ; input_field
             ~type_:"number"
             ~label:"Duration (seconds)"
@@ -888,7 +906,12 @@ let editor_view model catalog editor inject =
   let dialog =
     match model.Model.dialog with
     | No_dialog -> Vdom.Node.none
-    | Song_form form -> song_dialog form catalog.Protocol.songs inject
+    | Song_form form ->
+      song_dialog
+        form
+        catalog.Protocol.songs
+        ~on_change_song:(open_song { form with choosing_file = true; search = "" })
+        inject
     | Break_form form -> break_dialog form inject
     | Confirm_delete index ->
       confirm_dialog

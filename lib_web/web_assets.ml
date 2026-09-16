@@ -77,6 +77,9 @@ input:focus, select:focus { outline: 3px solid rgba(142,53,47,.14); border-color
 .search-results { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: white; }
 .song-choice { width: 100%; border: 0; border-bottom: 1px solid #eee8df; background: white; padding: 10px 12px; text-align: left; overflow-wrap: anywhere; }
 .song-choice:hover, .song-choice.selected { background: #f4ece2; }
+.selected-song { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; padding: 14px; border: 1px solid var(--green); border-radius: 9px; background: #f1f6ee; }
+.selected-song > div { flex: 1; min-width: 0; }
+.selected-song .event-title { margin-top: 6px; }
 @media (max-width: 760px) {
   .shell { padding: 22px 14px 48px; }
   .masthead, .toolbar { align-items: stretch; flex-direction: column; }
