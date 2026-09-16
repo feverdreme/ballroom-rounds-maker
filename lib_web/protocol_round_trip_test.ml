@@ -44,6 +44,22 @@ let () =
     ~of_sexp:Protocol.initialize_result_of_sexp
     initialize_result;
   assert_round_trip
+    ~sexp_of:Protocol.sexp_of_list_rounds_request
+    ~of_sexp:Protocol.list_rounds_request_of_sexp
+    workspace;
+  assert_round_trip
+    ~sexp_of:Protocol.sexp_of_list_rounds_result
+    ~of_sexp:Protocol.list_rounds_result_of_sexp
+    initialize_result.rounds;
+  assert_round_trip
+    ~sexp_of:Protocol.sexp_of_list_songs_request
+    ~of_sexp:Protocol.list_songs_request_of_sexp
+    workspace;
+  assert_round_trip
+    ~sexp_of:Protocol.sexp_of_list_songs_result
+    ~of_sexp:Protocol.list_songs_result_of_sexp
+    initialize_result.songs;
+  assert_round_trip
     ~sexp_of:Protocol.sexp_of_load_request
     ~of_sexp:Protocol.load_request_of_sexp
     Protocol.{ workspace; path = "evening.sexp" };

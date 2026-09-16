@@ -105,8 +105,9 @@ module Action = struct
     | Change_workspace
     | New_round
     | Loaded of string * Round.t Or_error.t
+    | Rounds_refreshed of Protocol.list_rounds_result Or_error.t
     | Set_round_name of string
-    | Open_song of int option
+    | Songs_refreshed of Model.song_form * Protocol.list_songs_result Or_error.t
     | Set_song_search of string
     | Set_song_filepath of string
     | Set_song_duration of string
@@ -125,8 +126,7 @@ module Action = struct
     | Drop_on of int
     | Cancel_dialog
     | Request_dashboard
-    | Leave_editor
-    | Saved of Protocol.save_result Or_error.t
+    | Saved of Round.t * Protocol.save_result Or_error.t
 end
 
 open Model
@@ -216,7 +216,7 @@ let break_form_of_event index = function
   | Song _ -> Model.{ index = Some index; duration = "10"; error = None }
 ;;
 
-let apply_action _context (model : Model.t) (action : Action.t) =
+let apply_action_unblocked (model : Model.t) (action : Action.t) =
   match action with
   | Set_rounds_dir rounds_dir ->
     { model with workspace = { model.workspace with rounds_dir }; error = None }
@@ -264,17 +264,31 @@ let apply_action _context (model : Model.t) (action : Action.t) =
     ; error = None
     ; message = None
     }
+  | Rounds_refreshed (Error error) ->
+    { model with
+      loading = false
+    ; dialog = No_dialog
+    ; error = Some (Error.to_string_hum error)
+    }
+  | Rounds_refreshed (Ok rounds) ->
+    let catalog = Option.map model.catalog ~f:(fun catalog -> { catalog with rounds }) in
+    { model with
+      catalog
+    ; page = Dashboard
+    ; editor = None
+    ; dialog = No_dialog
+    ; loading = false
+    ; error = None
+    ; message = None
+    }
   | Set_round_name name ->
     update_editor model ~f:(fun editor ->
       { editor with draft = { editor.draft with name } })
-  | Open_song index ->
-    let form =
-      match index, model.editor with
-      | Some index, Some editor ->
-        song_form_of_event index (List.nth_exn editor.draft.events index)
-      | _ -> empty_song_form index
-    in
-    { model with dialog = Song_form form }
+  | Songs_refreshed (_, Error error) ->
+    { model with loading = false; error = Some (Error.to_string_hum error) }
+  | Songs_refreshed (form, Ok songs) ->
+    let catalog = Option.map model.catalog ~f:(fun catalog -> { catalog with songs }) in
+    { model with catalog; dialog = Song_form form; loading = false; error = None }
   | Set_song_search search -> update_song_form model ~f:(fun form -> { form with search })
   | Set_song_filepath filepath ->
     update_song_form model ~f:(fun form -> { form with filepath })
@@ -376,31 +390,23 @@ let apply_action _context (model : Model.t) (action : Action.t) =
     (match model.editor with
      | Some editor when editor_is_dirty editor -> { model with dialog = Confirm_leave }
      | _ -> { model with page = Dashboard; editor = None; dialog = No_dialog })
-  | Leave_editor ->
-    { model with
-      page = Dashboard
-    ; editor = None
-    ; dialog = No_dialog
-    ; error = None
-    ; message = None
-    }
-  | Saved (Error error) ->
+  | Saved (_, Error error) ->
     { model with loading = false; error = Some (Error.to_string_hum error) }
-  | Saved (Ok saved) ->
+  | Saved (submitted, Ok saved) ->
     (match model.editor with
      | None -> { model with loading = false }
      | Some editor ->
-       (* CR aide for jeffrey: The request saved the draft captured by [save_effect], but
+       (* XCR aide for jeffrey: The request saved the draft captured by [save_effect], but
           this reducer marks the editor's current draft as saved. Since the form remains
           editable while [loading], edits made during the request are falsely shown as
           saved and can be lost on navigation. Carry the submitted round in [Saved], or
           disable every editing action until the response arrives. *)
-       let editor = { editor with path = Some saved.path; saved = editor.draft } in
+       let editor = { editor with path = Some saved.path; saved = submitted } in
        let summary =
          Protocol.
            { path = saved.path
-           ; name = editor.draft.name
-           ; event_count = List.length editor.draft.events
+           ; name = submitted.name
+           ; event_count = List.length submitted.events
            }
        in
        let catalog =
@@ -420,6 +426,13 @@ let apply_action _context (model : Model.t) (action : Action.t) =
        ; error = None
        ; message = Some ("Saved to " ^ saved.path)
        })
+;;
+
+let apply_action _context (model : Model.t) (action : Action.t) =
+  match action with
+  | Initialized _ | Loaded _ | Rounds_refreshed _ | Songs_refreshed _ | Saved _ ->
+    apply_action_unblocked model action
+  | _ -> if model.loading then model else apply_action_unblocked model action
 ;;
 
 let post ~path ~sexp ~of_sexp =
@@ -442,9 +455,8 @@ let post ~path ~sexp ~of_sexp =
 ;;
 
 let initialize_effect workspace inject =
-  let open Effect.Let_syntax in
-  let%bind () = inject Action.Start_request in
-  let%bind response =
+  let%bind.Effect () = inject Action.Start_request in
+  let%bind.Effect response =
     Effect.of_deferred_fun
       (fun workspace ->
         post
@@ -454,6 +466,34 @@ let initialize_effect workspace inject =
       workspace
   in
   inject (Initialized response)
+;;
+
+let refresh_rounds_effect workspace inject =
+  let%bind.Effect () = inject Action.Start_request in
+  let%bind.Effect response =
+    Effect.of_deferred_fun
+      (fun workspace ->
+        post
+          ~path:"/api/rounds"
+          ~sexp:(Protocol.sexp_of_list_rounds_request workspace)
+          ~of_sexp:(Or_error.t_of_sexp Protocol.list_rounds_result_of_sexp))
+      workspace
+  in
+  inject (Rounds_refreshed response)
+;;
+
+let refresh_songs_effect workspace form inject =
+  let%bind.Effect () = inject Action.Start_request in
+  let%bind.Effect response =
+    Effect.of_deferred_fun
+      (fun workspace ->
+        post
+          ~path:"/api/songs"
+          ~sexp:(Protocol.sexp_of_list_songs_request workspace)
+          ~of_sexp:(Or_error.t_of_sexp Protocol.list_songs_result_of_sexp))
+      workspace
+  in
+  inject (Songs_refreshed (form, response))
 ;;
 
 let load_effect workspace path inject =
@@ -485,7 +525,7 @@ let save_effect workspace (editor : Model.editor) inject =
           ~of_sexp:(Or_error.t_of_sexp Protocol.save_result_of_sexp))
       request
   in
-  inject (Saved response)
+  inject (Saved (editor.draft, response))
 ;;
 
 let attr_class name = Vdom.Attr.class_ name
@@ -598,10 +638,6 @@ let dashboard_view model catalog inject =
       ]
     else
       List.map rounds ~f:(fun round ->
-        (* CR-soon aide for jeffrey: Round cards remain clickable while a load is in
-           flight. Two quick clicks can complete out of order and open the first round
-           after the user selected the second. Disable these while [model.loading] or
-           attach an id to each request and discard stale responses. *)
         Vdom.Node.button
           [ attr_class "round-card"
           ; Vdom.Attr.on_click (fun _ -> load_effect model.workspace round.path inject)
@@ -661,11 +697,11 @@ let event_description = function
     title, details
 ;;
 
-let event_view ~event_count index event inject =
+let event_view ~event_count ~open_song index event inject =
   let title, details = event_description event in
   let edit_action =
     match event with
-    | Round.Event.Song _ -> inject (Action.Open_song (Some index))
+    | Round.Event.Song _ -> open_song (song_form_of_event index event)
     | Break _ -> inject (Open_break (Some index))
   in
   Vdom.Node.div
@@ -814,7 +850,7 @@ let break_dialog form inject =
     ]
 ;;
 
-let confirm_dialog ~title ~body ~confirm_label ~confirm_action inject =
+let confirm_dialog ~title ~body ~confirm_label ~on_confirm inject =
   Vdom.Node.div
     [ attr_class "dialog-backdrop" ]
     [ Vdom.Node.div
@@ -823,11 +859,7 @@ let confirm_dialog ~title ~body ~confirm_label ~confirm_action inject =
         ; Vdom.Node.p [] [ text body ]
         ; Vdom.Node.div
             [ attr_class "actions" ]
-            [ button
-                ~kind:"danger"
-                ~label:confirm_label
-                ~on_click:(inject confirm_action)
-                ()
+            [ button ~kind:"danger" ~label:confirm_label ~on_click:on_confirm ()
             ; button ~label:"Cancel" ~on_click:(inject Cancel_dialog) ()
             ]
         ]
@@ -835,6 +867,8 @@ let confirm_dialog ~title ~body ~confirm_label ~confirm_action inject =
 ;;
 
 let editor_view model catalog editor inject =
+  let dirty = editor_is_dirty editor in
+  let open_song form = refresh_songs_effect model.workspace form inject in
   let events =
     if List.is_empty editor.Model.draft.events
     then
@@ -844,9 +878,13 @@ let editor_view model catalog editor inject =
       ]
     else
       List.mapi editor.draft.events ~f:(fun index event ->
-        event_view ~event_count:(List.length editor.draft.events) index event inject)
+        event_view
+          ~event_count:(List.length editor.draft.events)
+          ~open_song
+          index
+          event
+          inject)
   in
-  let dirty = editor_is_dirty editor in
   let dialog =
     match model.Model.dialog with
     | No_dialog -> Vdom.Node.none
@@ -857,20 +895,27 @@ let editor_view model catalog editor inject =
         ~title:"Delete event?"
         ~body:"This removes the event from the draft round."
         ~confirm_label:"Delete event"
-        ~confirm_action:(Delete_event index)
+        ~on_confirm:(inject (Delete_event index))
         inject
     | Confirm_leave ->
       confirm_dialog
         ~title:"Discard unsaved changes?"
         ~body:"Your changes since the last save will be lost."
         ~confirm_label:"Discard changes"
-        ~confirm_action:Leave_editor
+        ~on_confirm:(refresh_rounds_effect model.workspace inject)
         inject
   in
   Vdom.Node.div
     [ attr_class "shell" ]
     [ masthead
-        ~action:(button ~label:"All rounds" ~on_click:(inject Request_dashboard) ())
+        ~action:
+          (button
+             ~label:"All rounds"
+             ~on_click:
+               (if dirty
+                then inject Request_dashboard
+                else refresh_rounds_effect model.workspace inject)
+             ())
         ()
     ; Vdom.Node.main
         [ attr_class "editor-grid" ]
@@ -891,7 +936,7 @@ let editor_view model catalog editor inject =
                 [ text "Drag events to reorder them, or use the arrow buttons." ]
             ; Vdom.Node.div
                 [ attr_class "actions" ]
-                [ button ~label:"Add song" ~on_click:(inject (Open_song None)) ()
+                [ button ~label:"Add song" ~on_click:(open_song (empty_song_form None)) ()
                 ; button ~label:"Add break" ~on_click:(inject (Open_break None)) ()
                 ]
             ; Vdom.Node.div [ attr_class "field" ] []
@@ -921,11 +966,21 @@ let app (local_ graph) =
     Bonsai.state_machine ~default_model:Model.default ~apply_action graph
   in
   let%arr model and inject in
-  match model.Model.page, model.catalog, model.editor with
-  | Configure, _, _ -> configure_view model inject
-  | Dashboard, Some catalog, _ -> dashboard_view model catalog inject
-  | Editor, Some catalog, Some editor -> editor_view model catalog editor inject
-  | _ -> configure_view model inject
+  if model.Model.loading
+  then
+    Vdom.Node.div
+      [ attr_class "shell" ]
+      [ masthead ()
+      ; Vdom.Node.main
+          [ attr_class "panel"; Vdom.Attr.create "role" "status" ]
+          [ text "Working… Please wait." ]
+      ]
+  else (
+    match model.Model.page, model.catalog, model.editor with
+    | Configure, _, _ -> configure_view model inject
+    | Dashboard, Some catalog, _ -> dashboard_view model catalog inject
+    | Editor, Some catalog, Some editor -> editor_view model catalog editor inject
+    | _ -> configure_view model inject)
 ;;
 
 let () = Bonsai_web.Start.start app

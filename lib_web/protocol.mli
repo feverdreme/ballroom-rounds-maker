@@ -22,6 +22,11 @@ type initialize_result =
   }
 [@@deriving sexp]
 
+type list_rounds_request = workspace [@@deriving sexp]
+type list_rounds_result = round_summary list [@@deriving sexp]
+type list_songs_request = workspace [@@deriving sexp]
+type list_songs_result = string list [@@deriving sexp]
+
 type load_request =
   { workspace : workspace
   ; path : string

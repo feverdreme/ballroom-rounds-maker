@@ -90,6 +90,13 @@ directory containing the source audio. The browser does not receive access to
 the filesystem itself; it exchanges S-expression messages with the local OCaml
 server, which performs the reads and writes.
 
+The file lists are refreshed on demand. Opening the rounds dashboard rescans
+the rounds directory for sexp files, and opening the Add/Edit Song dialog
+rescans the source directory for supported audio files (`.mp3`, `.wav`, and
+`.m4a`). Changes made outside the editor therefore appear the next time the
+corresponding view is opened; the server does not continuously watch or poll
+either directory.
+
 Use a different port if needed:
 
 ```bash
