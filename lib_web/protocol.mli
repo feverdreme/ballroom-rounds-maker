@@ -36,5 +36,3 @@ type save_request =
 [@@deriving sexp]
 
 type save_result = { path : string } [@@deriving sexp]
-
-(* XCR aide for jeffrey: Just use Or_error.t instead of this type. *)
