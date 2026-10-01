@@ -97,6 +97,10 @@ rescans the source directory for supported audio files (`.mp3`, `.wav`, and
 corresponding view is opened; the server does not continuously watch or poll
 either directory.
 
+Selecting an audio file collapses the search into a selected-song card. Use
+**Change song** to reopen and refresh the search; the current song appears first
+and is marked as selected, followed by the other matching files.
+
 Use a different port if needed:
 
 ```bash
