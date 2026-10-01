@@ -14,6 +14,8 @@ generate silence for breaks, and concatenate everything into one output file.
   `bonsai`, `bonsai_web`, `js_of_ocaml`, and `cohttp-async`
 - **ffmpeg** -- must be on your `PATH`, or pass `-ffmpeg-path` to point at a
   specific binary
+- **spotDL** (optional, for Spotify downloads) -- requires Python 3.10--3.14
+  and ffmpeg 4.2 or newer. Install it with `pip3 install spotdl`.
 
 Install OCaml dependencies:
 
@@ -71,6 +73,16 @@ produced programmatically (via `Round.save_to_file`) rather than hand-written.
 ```bash
 dune build
 ```
+
+### Test
+
+```bash
+dune runtest
+```
+
+The spotDL test downloads its documented sample track into a temporary
+directory, verifies that the resulting MP3 is nonempty, and then removes it.
+It requires spotDL, ffmpeg, network access, and writes progress logs as it runs.
 
 ### Run
 
@@ -135,3 +147,37 @@ Flags:
 - `-source-path` (optional, default `.`) -- base directory that song
   `filepath`s are resolved against.
 - `-ffmpeg-path` (optional, default `ffmpeg`) -- path to the ffmpeg binary.
+
+#### Download source MP3s with spotDL
+
+`download_spotify` accepts one or more Spotify track, album, playlist, or
+artist URLs. It creates the source directory when needed and downloads MP3s
+there using the filename format `<artists> - <title>.mp3`:
+
+```bash
+dune exec bin/download_spotify.exe -- \
+  -source-path hellrounds_source \
+  https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b
+```
+
+To use your Spotify developer application, pass its client ID and secret
+together. `-use-official-spotify-api` tells spotDL to use Spotify's official
+Web API client:
+
+```bash
+dune exec bin/download_spotify.exe -- \
+  -source-path hellrounds_source \
+  -spotify-client-id "$SPOTIFY_CLIENT_ID" \
+  -spotify-client-secret "$SPOTIFY_CLIENT_SECRET" \
+  -use-official-spotify-api \
+  https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b
+```
+
+Pass multiple URLs to download them in one spotDL invocation. If spotDL is not
+on `PATH`, use `-spotdl-path <path_to_spotdl>`. The command forwards credentials
+directly to spotDL, so avoid literal secrets in your shell history.
+
+By default, the command loads `~/.spotdl/config.json`. Override that location
+with `-spotdl-config <path_to_config.json>`; the path is forwarded as spotDL's
+`--config` argument. Generate a starting file with `spotdl --generate-config`,
+then set `client_id`, `client_secret`, and `use_official_api` there.
