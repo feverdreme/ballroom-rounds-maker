@@ -26,3 +26,10 @@
  (link_deps ../lib_web/client.bc.js)
  (preprocess
   (pps ppx_jane)))
+
+(executable
+ (name download_spotify)
+ (modules download_spotify)
+ (libraries core core_unix core_unix.command_unix core_unix.filename_unix rounds_lib)
+ (preprocess
+  (pps ppx_jane)))
