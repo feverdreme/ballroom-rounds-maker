@@ -56,8 +56,9 @@ round-trip tests that run through `dune runtest`.
   HTTP and reuse derived sexp converters rather than adding parallel JSON DTOs.
 - Keep web-protocol tests focused on serialization round trips; do not broaden
   them into API, UI, filesystem, or smoke tests unless explicitly requested.
-- `bin/main.ml` stable-deduplicates events by `Round.Event.to_string`, creates
-  or reuses artifact files, and then invokes the concat step.
+- `bin/main.ml` stable-deduplicates artifact generation by `Round.Event.to_string`,
+  creates or reuses artifact files, and concatenates the original event sequence,
+  including repeated songs and breaks.
 - Paths are resolved relative to the supplied source/artifact directories.
 - `Ffmpeg` shells out to the configured executable. Quote or validate any new
   paths and arguments consistently with the existing code.

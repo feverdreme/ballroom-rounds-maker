@@ -21,35 +21,36 @@ let convert_round
   =
   let round = Rounds_lib.Round.read_from_file ~filepath:round_sexp_path in
   let%bind.Or_error () = Rounds_lib.Base_path.instantiate artifact_path in
-  (* Deduplicate the filenames *)
+  let artifact_filepath event =
+    let path =
+      Rounds_lib.Round.Event.to_string event
+      |> Rounds_lib.Base_path.derive_path artifact_path
+    in
+    path ^ ".mp3"
+  in
+  (* Generate each artifact once, but preserve every event during playback. *)
   let unique_artifacts =
     List.stable_dedup round.events ~compare:(fun event1 event2 ->
       let path1 = Rounds_lib.Round.Event.to_string event1 in
       let path2 = Rounds_lib.Round.Event.to_string event2 in
       String.compare path1 path2)
   in
-  let%bind.Or_error artifacts =
+  let%bind.Or_error () =
     List.map unique_artifacts ~f:(fun event ->
-      let output_path =
-        Rounds_lib.Round.Event.to_string event
-        |> Rounds_lib.Base_path.derive_path artifact_path
-      in
+      let output_path = artifact_filepath event in
       let source =
         map_path ~event ~f:(fun song_path ->
           Filename.concat (Rounds_lib.Base_path.get_path source_path) song_path)
       in
-      let output_path = [%string "%{output_path}.mp3"] in
       print_endline output_path;
-      let%bind.Or_error () =
-        match source with
-        | Rounds_lib.Round.Event.Song song ->
-          Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song:song.song_data ~output_path ()
-        | Break break ->
-          Rounds_lib.Ffmpeg.generate_break ~ffmpeg_path ~break ~output_path ()
-      in
-      Ok output_path)
-    |> Or_error.combine_errors
+      match source with
+      | Rounds_lib.Round.Event.Song song ->
+        Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song:song.song_data ~output_path ()
+      | Break break ->
+        Rounds_lib.Ffmpeg.generate_break ~ffmpeg_path ~break ~output_path ())
+    |> Or_error.combine_errors_unit
   in
+  let artifacts = List.map round.events ~f:artifact_filepath in
   (* Concat everything *)
   Rounds_lib.Ffmpeg.ffmpeg_concat
     ~ffmpeg_path

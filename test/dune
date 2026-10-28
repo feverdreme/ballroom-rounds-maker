@@ -3,3 +3,9 @@
  (libraries async_log.kernel core core_unix core_unix.filename_unix rounds_lib)
  (preprocess
   (pps ppx_jane ppx_log)))
+
+(rule
+ (alias runtest)
+ (deps round_order_test.sh round_order.sexp)
+ (action
+  (run bash %{dep:round_order_test.sh} %{exe:../bin/main.exe} %{dep:round_order.sexp})))

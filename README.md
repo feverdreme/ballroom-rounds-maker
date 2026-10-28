@@ -55,7 +55,7 @@ produced programmatically (via `Round.save_to_file`) rather than hand-written.
 `bin/main.ml` reads a `Round.t` sexp file and runs the pipeline in
 `convert_round`:
 
-1. **Deduplicate events** -- events are stable-deduped by their string
+1. **Deduplicate artifact generation** -- events are stable-deduped by their string
    representation (song path + fade/duration, or break duration) so repeated
    entries reuse the same artifact.
 2. **Create + trim artifacts** -- each unique `Song` is trimmed from
@@ -63,8 +63,9 @@ produced programmatically (via `Round.save_to_file`) rather than hand-written.
    ffmpeg; each unique `Break` becomes a generated silent MP3 (skipped if it
    already exists). Artifact filenames are derived from the event's string
    representation under `-artifact-path`.
-3. **Concatenate** -- all artifact paths are written to an ffmpeg concat
-   demuxer list and ffmpeg produces the final MP3 (192 kbps) at `-output`.
+3. **Concatenate** -- artifact paths are written in the original event order,
+   including every repeated song and break, to an ffmpeg concat demuxer list.
+   ffmpeg produces the final MP3 (192 kbps) at `-output`.
 
 ## Usage
 
@@ -83,6 +84,8 @@ dune runtest
 The spotDL test downloads its documented sample track into a temporary
 directory, verifies that the resulting MP3 is nonempty, and then removes it.
 It requires spotDL, ffmpeg, network access, and writes progress logs as it runs.
+The converter regression test uses a stub in place of ffmpeg to check that its
+concat list preserves repeated songs and breaks in order; it does not encode audio.
 
 ### Run
 
