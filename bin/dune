@@ -33,3 +33,10 @@
  (libraries core core_unix core_unix.command_unix core_unix.filename_unix rounds_lib)
  (preprocess
   (pps ppx_jane)))
+
+(executable
+ (name mcp)
+ (modules mcp)
+ (libraries core core_unix.command_unix rounds_mcp_server)
+ (preprocess
+  (pps ppx_jane)))

@@ -1,4 +1,5 @@
 module Round = Rounds_model.Round
+module Converter = Converter
 module Ffmpeg = Ffmpeg
 module Base_path = Base_path
 module File_browser = File_browser

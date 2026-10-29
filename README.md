@@ -11,7 +11,7 @@ generate silence for breaks, and concatenate everything into one output file.
 - **OCaml** (with opam)
 - **Dune 3**
 - **opam packages:** `core`, `core_unix`, `unix`, `ppx_jane`, `async`,
-  `bonsai`, `bonsai_web`, `js_of_ocaml`, and `cohttp-async`
+  `bonsai`, `bonsai_web`, `js_of_ocaml`, `cohttp-async`, and `yojson`
 - **ffmpeg** -- must be on your `PATH`, or pass `-ffmpeg-path` to point at a
   specific binary
 - **spotDL** (optional, for Spotify downloads) -- requires Python 3.10--3.14
@@ -20,7 +20,7 @@ generate silence for breaks, and concatenate everything into one output file.
 Install OCaml dependencies:
 
 ```bash
-opam install core core_unix ppx_jane async bonsai bonsai_web js_of_ocaml cohttp-async
+opam install core core_unix ppx_jane async bonsai bonsai_web js_of_ocaml cohttp-async yojson
 ```
 
 ## The round sexp format
@@ -161,6 +161,48 @@ Flags:
 - `-source-path` (optional, default `.`) -- base directory that song
   `filepath`s are resolved against.
 - `-ffmpeg-path` (optional, default `ffmpeg`) -- path to the ffmpeg binary.
+
+#### MCP server for agents
+
+`mcp` serves a [Model Context Protocol](https://modelcontextprotocol.io) server
+over stdio so coding agents can manage rounds, download songs, and produce
+round MP3s through typed tools instead of shell commands:
+
+| Tool | Effect |
+| --- | --- |
+| `list_rounds` | List round sexp files with names and event counts. |
+| `list_songs` | List audio files in the source directory. |
+| `get_round` | Return a round as a `Round.t` sexp. |
+| `save_round` | Validate and save a `Round.t` sexp. |
+| `delete_round` | Delete a round sexp file. |
+| `download_songs` | Download Spotify URLs into the source directory with spotDL. |
+| `produce_round` | Render a saved round to `<output-path>/<round path>.mp3`. |
+
+Rounds travel as `Round.t` sexp strings, the same format as the files.
+`save_round` rejects unparseable rounds, songs whose fades exceed their
+duration, non-positive breaks, and song paths missing from the source
+directory; without an explicit `path` it also refuses to overwrite an existing
+round. Round paths must be relative and cannot contain `.` or `..` segments.
+
+Every directory is fixed when the server starts, so the agent cannot read or
+write outside them. Use absolute paths, because the agent decides the working
+directory. To register the server with Claude Code:
+
+```bash
+dune build
+claude mcp add rounds -- "$PWD/_build/default/bin/mcp.exe" \
+  -rounds-path "$PWD/rounds" \
+  -source-path "$PWD/hellrounds_source" \
+  -artifact-path "$PWD/hellrounds_source_artifacts" \
+  -output-path "$PWD/rounds_output"
+```
+
+The optional flags `-ffmpeg-path`, `-spotdl-path`, `-spotdl-config`, and
+`-use-official-spotify-api` behave like the converter and downloader flags.
+Spotify credentials are read only from the spotDL config file, so they never
+appear in tool calls. ffmpeg and spotDL output goes to the server's stderr, so
+it cannot corrupt the protocol stream on stdout. Tool calls run one at a time;
+`produce_round` and `download_songs` block until ffmpeg or spotDL finishes.
 
 #### Download source MP3s with spotDL
 
