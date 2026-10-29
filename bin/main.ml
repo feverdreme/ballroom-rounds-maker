@@ -1,65 +1,5 @@
 open! Core
 
-let map_path ~event ~(f : string -> string) =
-  match event with
-  | Rounds_lib.Round.Event.Song song ->
-    Rounds_lib.Round.Event.Song
-      { name = song.name
-      ; dance = song.dance
-      ; song_data = { song.song_data with filepath = f song.song_data.filepath }
-      }
-  | Break _ -> event
-;;
-
-let convert_round
-  ~(ffmpeg_path : string)
-  ~(round_sexp_path : string)
-  ~(output_mp3_path : string)
-  ~(source_path : Rounds_lib.Base_path.t)
-  ~(artifact_path : Rounds_lib.Base_path.t)
-  : unit Or_error.t
-  =
-  let round = Rounds_lib.Round.read_from_file ~filepath:round_sexp_path in
-  let%bind.Or_error () = Rounds_lib.Base_path.instantiate artifact_path in
-  let artifact_filepath event =
-    let path =
-      Rounds_lib.Round.Event.to_string event
-      |> Rounds_lib.Base_path.derive_path artifact_path
-    in
-    path ^ ".mp3"
-  in
-  (* Generate each artifact once, but preserve every event during playback. *)
-  let unique_artifacts =
-    List.stable_dedup round.events ~compare:(fun event1 event2 ->
-      let path1 = Rounds_lib.Round.Event.to_string event1 in
-      let path2 = Rounds_lib.Round.Event.to_string event2 in
-      String.compare path1 path2)
-  in
-  let%bind.Or_error () =
-    List.map unique_artifacts ~f:(fun event ->
-      let output_path = artifact_filepath event in
-      let source =
-        map_path ~event ~f:(fun song_path ->
-          Filename.concat (Rounds_lib.Base_path.get_path source_path) song_path)
-      in
-      print_endline output_path;
-      match source with
-      | Rounds_lib.Round.Event.Song song ->
-        Rounds_lib.Ffmpeg.trim ~ffmpeg_path ~song:song.song_data ~output_path ()
-      | Break break ->
-        Rounds_lib.Ffmpeg.generate_break ~ffmpeg_path ~break ~output_path ())
-    |> Or_error.combine_errors_unit
-  in
-  let artifacts = List.map round.events ~f:artifact_filepath in
-  (* Concat everything *)
-  Rounds_lib.Ffmpeg.ffmpeg_concat
-    ~ffmpeg_path
-    ~sources:artifacts
-    ~artifacts_path:artifact_path
-    ~output_path:output_mp3_path
-    ()
-;;
-
 let convert_command =
   Command.basic_or_error
     ~summary:"Convert a Round.t sexp file into a single concatenated mp3"
@@ -91,12 +31,14 @@ let convert_command =
          Rounds_lib.Base_path.create ~base_dir:artifact_dir
        in
        let%bind.Or_error source_path = Rounds_lib.Base_path.create ~base_dir:source_dir in
-       convert_round
+       let round = Rounds_lib.Round.read_from_file ~filepath:round_sexp_path in
+       Rounds_lib.Converter.convert
          ~ffmpeg_path
-         ~round_sexp_path
-         ~output_mp3_path
+         ~round
          ~source_path
-         ~artifact_path)
+         ~artifact_path
+         ~output_path:output_mp3_path
+         ())
 ;;
 
 let () = Command_unix.run convert_command

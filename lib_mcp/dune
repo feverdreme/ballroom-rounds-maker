@@ -1,0 +1,13 @@
+(library
+ (name rounds_mcp_server)
+ (modules server)
+ (libraries
+  core
+  core_unix
+  core_unix.command_unix
+  core_unix.filename_unix
+  core_unix.sys_unix
+  rounds_lib
+  yojson)
+ (preprocess
+  (pps ppx_jane)))

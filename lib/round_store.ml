@@ -51,3 +51,8 @@ let save ~rounds_dir ~path round =
 ;;
 
 let path_for_new_round round = File_browser.sanitize_filename round.Round.name ^ ".sexp"
+
+let delete ~rounds_dir ~path =
+  let%bind.Or_error absolute = resolve ~rounds_dir path in
+  Or_error.try_with (fun () -> Sys_unix.remove absolute)
+;;

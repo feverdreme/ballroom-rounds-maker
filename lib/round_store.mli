@@ -16,4 +16,5 @@ val save
   -> Rounds_model.Round.t
   -> unit Or_error.t
 
+val delete : rounds_dir:Base_path.t -> path:string -> unit Or_error.t
 val path_for_new_round : Rounds_model.Round.t -> string
