@@ -57,10 +57,23 @@ let list_songs t =
   else Ok []
 ;;
 
+(* Report unreadable round files alongside the readable ones, so one bad file does not
+   hide every round from the agent. *)
 let list_rounds t =
-  if Sys_unix.file_exists_exn (Base_path.get_path t.rounds_dir)
-  then Round_store.list ~rounds_dir:t.rounds_dir
-  else Ok []
+  let%map.Or_error rounds =
+    if Sys_unix.file_exists_exn (Base_path.get_path t.rounds_dir)
+    then Round_store.list_each ~rounds_dir:t.rounds_dir
+    else Ok []
+  in
+  let rounds, unreadable =
+    List.partition_map rounds ~f:(fun (path, summary) ->
+      match summary with
+      | Ok summary -> First summary
+      | Error error -> Second (path, error))
+  in
+  if List.is_empty unreadable
+  then [%sexp (rounds : Round_store.summary list)]
+  else [%sexp { rounds : Round_store.summary list; unreadable : (string * Error.t) list }]
 ;;
 
 (* Catch errors that would otherwise only surface halfway through an ffmpeg run. *)
@@ -185,7 +198,7 @@ let tools =
     ; run =
         (fun t _ ->
           let%map.Or_error rounds = list_rounds t in
-          render [%sexp (rounds : Round_store.summary list)])
+          render rounds)
     }
   ; { name = "list_songs"
     ; description =
@@ -320,7 +333,10 @@ let handle_request t ~meth ~params =
         ])
   | "ping" -> Ok (`Assoc [])
   | "tools/list" -> Ok (`Assoc [ "tools", `List (List.map tools ~f:tool_to_json) ])
-  | "tools/call" -> Ok (call_tool t params)
+  | "tools/call" ->
+    (match params with
+     | `Assoc _ -> Ok (call_tool t params)
+     | _ -> Error (-32602, "tools/call params must be an object"))
   | _ -> Error (-32601, [%string "Method not found: %{meth}"])
 ;;
 
@@ -335,13 +351,19 @@ let error_response ~id ~code ~message =
 (* Returns [None] for notifications, which get no response. *)
 let handle_message t message =
   let open Yojson.Safe.Util in
-  match member "id" message, member "method" message with
-  | `Null, _ -> None
-  | id, `String meth ->
-    (match handle_request t ~meth ~params:(member "params" message) with
-     | Ok result -> Some (`Assoc [ "jsonrpc", `String "2.0"; "id", id; "result", result ])
-     | Error (code, message) -> Some (error_response ~id ~code ~message))
-  | id, _ -> Some (error_response ~id ~code:(-32600) ~message:"Invalid request")
+  match message with
+  | `Assoc _ ->
+    (match member "id" message, member "method" message with
+     | `Null, _ -> None
+     | id, `String meth ->
+       (match handle_request t ~meth ~params:(member "params" message) with
+        | Ok result ->
+          Some (`Assoc [ "jsonrpc", `String "2.0"; "id", id; "result", result ])
+        | Error (code, message) -> Some (error_response ~id ~code ~message))
+     | id, _ -> Some (error_response ~id ~code:(-32600) ~message:"Invalid request"))
+  | _ ->
+    Some
+      (error_response ~id:`Null ~code:(-32600) ~message:"Request must be a JSON object")
 ;;
 
 (* MCP owns stdin and stdout, but ffmpeg, spotDL, and the library's progress printing all

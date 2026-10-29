@@ -24,19 +24,26 @@ let resolve ~rounds_dir path =
   Filename.concat (Base_path.get_path rounds_dir) path
 ;;
 
-let list ~rounds_dir =
+let list_each ~rounds_dir =
   let root = Base_path.get_path rounds_dir in
-  let%bind.Or_error paths =
+  let%map.Or_error paths =
     File_browser.list_files_by_extension ~root ~extensions:[ ".sexp" ]
   in
   List.map paths ~f:(fun path ->
-    let%map.Or_error round =
-      Or_error.try_with (fun () ->
-        let absolute = Filename.concat root path in
-        Round.read_from_file ~filepath:absolute)
+    let summary =
+      let%map.Or_error round =
+        Or_error.try_with (fun () ->
+          let absolute = Filename.concat root path in
+          Round.read_from_file ~filepath:absolute)
+      in
+      { path; name = round.name; event_count = List.length round.events }
     in
-    { path; name = round.name; event_count = List.length round.events })
-  |> Or_error.combine_errors
+    path, summary)
+;;
+
+let list ~rounds_dir =
+  let%bind.Or_error rounds = list_each ~rounds_dir in
+  List.map rounds ~f:snd |> Or_error.combine_errors
 ;;
 
 let load ~rounds_dir ~path =

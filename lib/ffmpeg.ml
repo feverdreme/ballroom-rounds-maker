@@ -62,11 +62,16 @@ let make_absolute (path : string) : string =
   if Filename.is_relative path then Filename.concat (Sys_unix.getcwd ()) path else path
 ;;
 
-(** Write an ffmpeg concat-demuxer file listing the absolute paths of [sourcelist]. *)
+(** Write an ffmpeg concat-demuxer file listing the absolute paths of [sourcelist]. The
+    demuxer has no escape inside single quotes, so each ['] closes the quote, emits an
+    escaped quote, and reopens it. *)
 let create_concat_list ~sources ~output_path : unit =
   Out_channel.with_file output_path ~f:(fun output_channel ->
     List.iter sources ~f:(fun source ->
-      Printf.fprintf output_channel "file '%s'\n" (make_absolute source)))
+      let source =
+        String.substr_replace_all (make_absolute source) ~pattern:"'" ~with_:"'\\''"
+      in
+      Printf.fprintf output_channel "file '%s'\n" source))
 ;;
 
 let ffmpeg_concat ?(ffmpeg_path = "ffmpeg") ~sources ~artifacts_path ~output_path () =
