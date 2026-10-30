@@ -197,7 +197,7 @@ claude mcp add rounds -- "$PWD/_build/default/bin/mcp.exe" \
   -output-path "$PWD/rounds_output"
 ```
 
-The optional flags `-ffmpeg-path`, `-spotdl-path`, `-spotdl-config`, and
+The optional flags `-ffmpeg-path`, `-spotdl-path`, `-no-spotdl-config`, and
 `-use-official-spotify-api` behave like the converter and downloader flags.
 Spotify credentials are read only from the spotDL config file, so they never
 appear in tool calls. ffmpeg and spotDL output goes to the server's stderr, so
@@ -233,7 +233,8 @@ Pass multiple URLs to download them in one spotDL invocation. If spotDL is not
 on `PATH`, use `-spotdl-path <path_to_spotdl>`. The command forwards credentials
 directly to spotDL, so avoid literal secrets in your shell history.
 
-By default, the command loads `~/.spotdl/config.json`. Override that location
-with `-spotdl-config <path_to_config.json>`; the path is forwarded as spotDL's
-`--config` argument. Generate a starting file with `spotdl --generate-config`,
+By default, the command passes spotDL's `--config` flag, which loads spotDL's
+own config file (usually `~/.spotdl/config.json`). spotDL cannot load a config
+from another path, and it fails when that file is missing; pass
+`-no-spotdl-config` to skip it. Generate a starting file with `spotdl --generate-config`,
 then set `client_id`, `client_secret`, and `use_official_api` there.

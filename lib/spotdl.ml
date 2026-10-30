@@ -21,7 +21,7 @@ let spotify_credentials_args ~client_id ~client_secret =
 
 let download
   ?(spotdl_path = "spotdl")
-  ?config_path
+  ?(use_config = false)
   ?client_id
   ?client_secret
   ?(use_official_api = false)
@@ -37,9 +37,7 @@ let download
     in
     let%bind.Or_error () = Base_path.instantiate source_path in
     let official_api_args = if use_official_api then [ "--use-official-api" ] else [] in
-    let config_args =
-      Option.value_map config_path ~default:[] ~f:(fun path -> [ "--config"; path ])
-    in
+    let config_args = if use_config then [ "--config" ] else [] in
     let args =
       ("download" :: queries)
       @ [ "--format"; "mp3"; "--output"; output_template ]

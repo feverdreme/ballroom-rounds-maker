@@ -13,7 +13,7 @@ type t =
   ; output_dir : Base_path.t
   ; ffmpeg_path : string
   ; spotdl_path : string
-  ; spotdl_config : string
+  ; use_spotdl_config : bool
   ; use_official_spotify_api : bool
   }
 
@@ -132,7 +132,7 @@ let download_songs t arguments =
   let%bind.Or_error () =
     Rounds_lib.Spotdl.download
       ~spotdl_path:t.spotdl_path
-      ~config_path:t.spotdl_config
+      ~use_config:t.use_spotdl_config
       ~use_official_api:t.use_official_spotify_api
       ~queries:urls
       ~source_path:t.source_dir
@@ -401,10 +401,6 @@ let serve t =
   loop ()
 ;;
 
-let default_spotdl_config () =
-  Filename.concat (Sys.getenv_exn "HOME") ".spotdl/config.json"
-;;
-
 let command =
   Command.basic_or_error
     ~summary:"Serve round management, song downloads, and production over MCP stdio"
@@ -438,11 +434,11 @@ let command =
          "-spotdl-path"
          (optional_with_default "spotdl" string)
          ~doc:"PATH path to the spotdl binary (default: spotdl)"
-     and spotdl_config =
+     and no_spotdl_config =
        flag
-         "-spotdl-config"
-         (optional_with_default (default_spotdl_config ()) Filename_unix.arg_type)
-         ~doc:"PATH spotDL configuration file to load (default: ~/.spotdl/config.json)"
+         "-no-spotdl-config"
+         no_arg
+         ~doc:" skip loading spotDL's default config file (~/.spotdl/config.json)"
      and use_official_spotify_api =
        flag
          "-use-official-spotify-api"
@@ -461,7 +457,7 @@ let command =
          ; output_dir
          ; ffmpeg_path
          ; spotdl_path
-         ; spotdl_config
+         ; use_spotdl_config = not no_spotdl_config
          ; use_official_spotify_api
          })
 ;;
